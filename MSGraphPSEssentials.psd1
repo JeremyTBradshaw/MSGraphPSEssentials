@@ -23,15 +23,13 @@
     PrivateData          = @{
 
         PSData = @{
-            Prerelease   = 'pre-alpha'
-            Tags         = @('Microsoft Graph', 'OAuth', 'App-Only', 'Delegated', 'Device Code', 'JWT', 'Access Token', 'Refresh Token')
+            Prerelease   = '-alpha'
+            Tags         = @('MicrosoftGraph', 'OAuth', 'App-Only', 'Delegated', 'DeviceCode', 'JWT', 'AccessToken', 'RefreshToken')
             LicenseUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials'
             ReleaseNotes = @'
-    
 v0.0.0 (2020-12-05):
-
-  - Initial prerelease / pre-alpha version.
+- Initial (prerelease) version.
 '@
         }
     }
