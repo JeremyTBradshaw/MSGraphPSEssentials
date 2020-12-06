@@ -14,7 +14,7 @@
     Author               = 'Jeremy.Bradshaw@Outlook.com'
     CompanyName          = ''
     Copyright            = '(c) 2020 Jeremy Bradshaw. All rights reserved.'
-    Description          = 'Description TBD'
+    Description          = 'A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core)'
     PowerShellVersion    = '5.1'
     FunctionsToExport    = @()
     CmdletsToExport      = @()
