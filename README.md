@@ -5,7 +5,7 @@ This module is the successor of [MSGraphAppOnlyEssentials](https://github.com/Je
 
 I'll be porting the `New-MSGraphAccessToken` function over to this module first, then the rest of the original functions after that (which will for the most part be a copy paste).  For the former, I'll be adding in support for the device code flow right out of the gate.  It's actually quite easy to accomplish the device code flow in PowerShell, certainly easier than the client/certicate credentials (signed assertion) flow.  Once the module is up and running, I hope to then start focusing on producing scripts actually make use of this stuff.  Example ideas are:
 
-- (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/blob/main/New-LargeItemsSearchFolder.ps1)
+- (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/New-LargeItemsSearchFolder.ps1)
 - Script to reorganize large mailboxes into folders by year.  This could be used by Outlook.com users and Exchange Online users alike, and for the latter, either admins for bulk-usage, or individual users.
 - Similar scripts, but for OneDrive / OneDrive for Business.
 - ...and more, along these lines.
