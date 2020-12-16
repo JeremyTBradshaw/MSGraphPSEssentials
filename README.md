@@ -1,31 +1,19 @@
 # MSGraphPSEssentials
 A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core).
 
-This module is the successor of [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which is geared specifically towards App-Only use cases.  With this module, I intend to broaden the scope and support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
+This module is the successor of [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which is geared specifically towards App-Only use cases.  With this module, I've broadened the scope to support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're commonly limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
 
-I'm starting out with a direct copy/paste from the predecessor module.  Following that, and for my first addition in this new module, I'll be upgrading `New-MSGraphAccessToken`, adding in support for the device code flow as well as refresh tokens (for refreshing tokens acquired via device code flow).  It's actually quite easy to accomplish the device code flow in PowerShell, certainly easier than the client/certicate credentials (signed assertion) flow.  Once the initial version is publshed to the PoweShell Gallery, I hope to then start focusing on producing scripts that actually make use of this stuff, to drive some visibility into how/when/why to use this module.  Example ideas are:
+The module provides six essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only fashion using certificate credentials, _**or**_ in Delegated fashion, using Device Code flow (and/or Refresh Tokens).  There are a few other short and sweet utility functions included as well.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD and upload the initial certificate (for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with New-MSGraphRequest.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
 
-- (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/New-LargeItemsSearchFolder.ps1)
-- Script to reorganize large mailboxes into folders by year.  This could be used by Outlook.com users and Exchange Online users alike, and for the latter, either admins for bulk-usage, or individual users.
-- Similar scripts, but for OneDrive / OneDrive for Business.
-- ...and more, along these lines.
-
-For the immediate term, I've published a placeholder module to the PowerShell Gallery to hold down the name - **MSGraphPSEssentials**.
-
----
----
----
-_**Copied README from MSGraphAppOnlyEssentials**_:
-
-_(all the descriptions and examples are still 100% relevant)_
+**Come back soon to see updates that are coming to this page.  I'll also be building the Wiki and enabling Discussions.**
 
 ---
 
-This module provides six essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only fashion using certificate credentials.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD and upload the initial certificate.  Simply use the MS Graph API (v1.0 / beta) reference material to figure out your requests and query syntax, then start sending them with New-MSGraphRequest.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.  If you only need App-Only functionality, this module just might be for you.
-
-## Functions
+## (Essential) Functions
 
 ### New-MSGraphAccessToken
+
+*ℹ**Note:** This function recently received major updates, adding Device Code flow for getting delegated access tokens, and ability to refresh access tokens using refresh tokens.  I'll be updating the description, parameters, and examples soon.  In the meantime, the information below is still 100% relevant/working.*
 
 This function is used to get an access token.  Access tokens last for 1 hour, so keep this in mind in long-running scripts.
 
@@ -40,24 +28,24 @@ JWTExpMinutes | In case of a poorly-synced clock, use this to adjust the expiry 
 **Example 1**
 
 ```powershell
-$accessTKParams = @{
+$TokenObjectParams = @{
 
     ApplicationId = '4ba21eca-462c-46cd-b296-9467232638a4'
     TenantId      = 'c7bdcf5c-7a22-44f0-8240-146ababc5858'
     Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\F046351F8B17FA1755F4A567C175BEA1FC86A1EC'
 }
-$accessTK = New-MSGraphAccessToken @accessTKParams
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
 ```
 **Example 2**
 
 ```powershell
-$accessTKParams = @{
+$TokenObjectParams = @{
 
     ApplicationId        = '4ba21eca-462c-46cd-b296-9467232638a4'
     TenantId             = 'c7bdcf5c-7a22-44f0-8240-146ababc5858'
     CertificateStorePath = 'Cert:\CurrentUser\My\F046351F8B17FA1755F4A567C175BEA1FC86A1EC'
 }
-$accessTK = New-MSGraphAccessToken @accessTKParams
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
 ```
 
 ### New-MSGraphRequest
@@ -68,7 +56,7 @@ Parameters | Description
 ---------: | :-----------
 ApiVersion | **v1.0**, beta.  Use either of these as needed for the task at hand.  Stick to v1.0 for production scripts!
 Method | **GET**, POST, PATCH, PUT, DELETE.  Follow the reference articles' instructions and see the examples below.
-AccessToken | Use `$accessTK` where `$accessTK = New-MSGraphAccessToken ...`
+AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`
 Request | Use the **HTTP request** shown in MS Graph reference articles.  Include the query parameters, E.g. ``"auditLogs/signIns?&`$filter=userId eq '86d691b0-8c2b-4adf-bdcd-d9f0ab7b6183' and status/errorCode eq 0"``.  The leading forward slash (e.g. "<b>/</b>users") can be include or omitted.
 Body<br/>(Optional) | Use the **request body** as shown in MS Graph reference articles, supplied as a hashtable (the function converts it to JSON automatically).
 nextLinkAction | **Warn**, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
@@ -77,7 +65,7 @@ nextLinkAction | **Warn**, Inquire, Continue, SilentlyContinue.  When multiple p
 
 ```powershell
 # Get all users:
-New-MSGraphRequest -AccessToken $accessTK -Request users -nextLinkAction SilentlyContinue
+New-MSGraphRequest -AccessToken $TokenObject -Request users -nextLinkAction SilentlyContinue
 ```
 
 **Example 2**
@@ -95,7 +83,7 @@ $listItem = @{
 }
 
 $requestParams = @{
-    AccessToken = $accessTK
+    AccessToken = $TokenObject
     Method      = 'POST'
     Request     = 'sites/1098c395-c09a-4c84-8e5e-2f454f318667/lists/2d6ac42c-f4d9-4ba2-9897-220fc87bec8f/items'
     Body        = $listItem
@@ -115,7 +103,7 @@ $listItem = @{
 }
 
 $requestParams = @{
-    AccessToken = $accessTK
+    AccessToken = $TokenObject
     Method      = 'PATCH'
     Request     = 'sites/1098c395-c09a-4c84-8e5e-2f454f318667/lists/2d6ac42c-f4d9-4ba2-9897-220fc87bec8f/items/23'
     Body        = $listItem
@@ -195,7 +183,7 @@ Did you know Azure AD applications can roll their own keys!  No special permissi
 Parameters | Description
 ---------: | :-----------
 ApplicationObjectId | The app's Azure AD ObjectId (NOT the ApplicationId/ClientId).
-AccessToken | Use `$AccessTK` where `$AccessToken = New-MSGraphAccessToken ...`.
+AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`.
 PoPToken | User `$popTK` where `$popTK = New-MSGraphPoPToken ...`.
 Certificate<br />(Option 1) | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
 CertificateStorePath<br/>(Option 2) | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
@@ -203,13 +191,13 @@ CertificateStorePath<br/>(Option 2) | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B
 **Example 1**
 
 ```powershell
-$accessTKParams = @{
+$TokenObjectParams = @{
 
     ApplicationId = '309f2789-a5ea-4b3a-92ea-687d54249613'
     TenantId      = '1098c395-c09a-4c84-8e5e-2f454f318667'
     Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
 }
-$accessTK = New-MSGraphAccessToken @accessTKParams
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
 
 $popTKParams = @{
 
@@ -223,7 +211,7 @@ $newCert = New-SelfSignedMSGraphApplicationCertificate -DnsName "$($dateString).
 
 $addKeyParams = @{
 
-    AccessToken         = $accessTK
+    AccessToken         = $TokenObject
     PoPToken            = $popTK
     ApplicationObjectId = $popTKParams['ApplicationObjectId']
     Certificate         = $newCert
@@ -238,7 +226,7 @@ This is the sixth and last function in the bunch to cover.  It is used to remove
 Parameters | Description
 ---------: | :-----------
 ApplicationObjectId | The app's Azure AD ObjectId (NOT the ApplicationId/ClientId).
-AccessToken | Use `$AccessTK` where `$AccessToken = New-MSGraphAccessToken ...`.
+AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`.
 PoPToken | User `$popTK` where `$popTK = New-MSGraphPoPToken ...`.
 CertificateThumbprint<br/>(Option 1) | The thumbprint of the certificate/keyCredential to be removed.  The function will send a request to MS Graph to get the list of current keyCredentials, to find the keyId value for the one with the matching thumbprint.
 KeyId<br/>(Option 2) | The keyId (Guid) of the keyCredential to be removed.  This value can be found via MS Graph (i.e. request to applications/{id}) or in the Azure AD Portal.
@@ -246,13 +234,13 @@ KeyId<br/>(Option 2) | The keyId (Guid) of the keyCredential to be removed.  Thi
 **Example 1**
 
 ```powershell
-$accessTKParams = @{
+$TokenObjectParams = @{
 
     ApplicationId = '309f2789-a5ea-4b3a-92ea-687d54249613'
     TenantId      = '1098c395-c09a-4c84-8e5e-2f454f318667'
     Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
 }
-$accessTK = New-MSGraphAccessToken @accessTKParams
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
 
 $popTKParams = @{
 
@@ -262,7 +250,7 @@ $popTKParams = @{
 $popTK = New-MSGraphPoPToken @popTKParams
 
 $removeKeyParams = @{
-    AccessToken           = $accessTK
+    AccessToken           = $TokenObject
     PoPToken              = $popTK
     ApplicationObjectId   = $popTKParams['ApplicationObjectId']
     CertificateThumbprint = 'D7BC8D4E6A10053C29B62D2E2978CDDDEC5526AE'
@@ -273,13 +261,13 @@ Remove-MSGraphApplicationKeyCredential @removeKeyParams
 **Example 2**
 
 ```powershell
-$accessTKParams = @{
+$TokenObjectParams = @{
 
     ApplicationId = '309f2789-a5ea-4b3a-92ea-687d54249613'
     TenantId      = '1098c395-c09a-4c84-8e5e-2f454f318667'
     Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
 }
-$accessTK = New-MSGraphAccessToken @accessTKParams
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
 
 $popTKParams = @{
 
@@ -289,7 +277,7 @@ $popTKParams = @{
 $popTK = New-MSGraphPoPToken @popTKParams
 
 $removeKeyParams = @{
-    AccessToken         = $accessTK
+    AccessToken         = $TokenObject
     PoPToken            = $popTK
     ApplicationObjectId = $popTKParams['ApplicationObjectId']
     KeyId               = '046c2a7c-8b6f-4221-a5b5-4a4e8da12ce3'
@@ -297,24 +285,55 @@ $removeKeyParams = @{
 Remove-MSGraphApplicationKeyCredential @removeKeyParams
 ```
 
+## Utility Functions
+
+### ConvertTo-Base64Url
+
+*(description coming soon)*
+
+### ConvertFrom-Base64Url
+
+*(description coming soon)*
+
+### ConvertFrom-JWTAccessToken
+
+*(description coming soon)*
+
+## Next Steps
+
+ℹ**Up next:** I will be publishing the initial release to the PowerShell Gallery as v0.1.0.  The only reason for the low version number is to give myself room to make incremental updates until I'm ready to unveil it as v1.0.0.  I certainly feel as though it's ready for use anytime now though, so please don't hold back.
+
+Once the initial version of this module is publshed to the PoweShell Gallery, I hope to then start focusing on producing scripts that actually make use of this stuff, to drive some visibility into how/when/why to use this module.  Example ideas are:
+
+- (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/New-LargeItemsSearchFolder.ps1)
+- Script to reorganize large mailboxes into folders by year.  This could be used by Outlook.com users and Exchange Online users alike, and for the latter, either admins for bulk-usage, or individual users.
+- Similar scripts, but for OneDrive / OneDrive for Business.
+- ...and more, along these lines.
+
 ## References
 
 A lot of time and effort went into researching, development, and then testing to get these functions working as well as they do.  A few key blog posts, and otherwise lots and lots of Microsoft Docs articles, were my source for figuring this stuff out.  I'm listing links here that I have found particularly useful in the process.  I will add others if they come to mind as well.
 
-**Access Tokens / Client Assertion / JWT**
+**OAuth2 / JWT IETF's**
 
+https://tools.ietf.org/html/rfc6749<br/>
+https://tools.ietf.org/html/rfc7519<br/>
+
+**Client Credentials flow (certificate credentials) / Device Code flow**
+
+https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-client-creds-grant-flow<br/>
 https://docs.microsoft.com/en-us/azure/active-directory/develop/active-directory-certificate-credentials<br/>
 https://docs.microsoft.com/en-us/azure/active-directory/develop/msal-net-client-assertions<br/>
+https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/wiki/Client-Assertions<br/>
 https://docs.microsoft.com/en-us/azure/architecture/multitenant-identity/client-assertion<br/>
-https://docs.microsoft.com/en-us/azure/active-directory/develop/id-tokens<br/>
-https://adamtheautomator.com/microsoft-graph-api-powershell/<br/>
+https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code<br/>
+https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow#refresh-the-access-token<br/>
 
 **Application KeyCredential Management**
 
 https://docs.microsoft.com/en-us/graph/api/application-addkey?view=graph-rest-1.0&tabs=http<br/>
 https://docs.microsoft.com/en-us/graph/api/application-removekey?view=graph-rest-1.0&tabs=http<br/>
 https://docs.microsoft.com/en-us/graph/application-rollkey-prooftoken<br/>
-https://blog.annejanbarelds.nl/2020/03/04/how-to-handle-credential-provisioning-and-key-rolling-with-the-microsoft-graph-api/<br/>
 https://docs.microsoft.com/en-us/powershell/module/azuread/new-azureadapplicationkeycredential?view=azureadps-2.0#example-2--use-a-certificate-to-add-an-application-key-credential<br/>
 
 **Microsoft Graph Reference / Examples**
