@@ -1,141 +1,334 @@
 #Requires -Version 5.1
 using namespace System
+using namespace System.Management.Automation.Host
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
-using namespace System.Management.Automation.Host
 
 <#
-    v0.0.0 - Pre-release / unpublished (2020-12-07):
-    
-      - This is a direct copy/paste from MSGraphAppOnlyEssentials at this time.  So it works all the same.
-      - To see what I'm working on for the upgraded version of the New-MSGraphAccessToken function:
-        https://github.com/JeremyTBradshaw/PowerShell/blob/main/Dev/MSGraphPlayground.psm1
+    v0.1.0 - Initial version (Unpublished as of 2020-12-16):
+
+    - Need to do some final testing to ensure everything works.
+    - It is definitely close, possibly ready now.
 #>
 
 function New-MSGraphAccessToken {
 
     [CmdletBinding(
-        DefaultParameterSetName = 'Certificate'
+        DefaultParameterSetName = 'DeviceCode_Endpoint'
     )]
     param (
-        [Parameter(Mandatory)]
-        [Alias('Tenant', 'TenantName', 'TenantDomain', 'TenantDomainName')]
-        [string]$TenantId,
+        [Parameter(Mandatory, ParameterSetName = 'ClientCredentials_Certificate')]
+        [Parameter(Mandatory, ParameterSetName = 'ClientCredentials_CertificateStorePath')]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
+        [string]$TenantId, # Guid / FQDN
 
         [Parameter(Mandatory)]
-        [Alias('ClientId')]
         [Guid]$ApplicationId,
 
         [Parameter(
             Mandatory,
-            ParameterSetName = 'Certificate',
+            ParameterSetName = 'ClientCredentials_Certificate',
             HelpMessage = 'E.g. Use $Certificate, where `$Certificate = Get-ChildItem cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
         )]
         [X509Certificate2]$Certificate,
 
         [Parameter(
             Mandatory,
-            ParameterSetName = 'CertificateStorePath',
+            ParameterSetName = 'ClientCredentials_CertificateStorePath',
             HelpMessage = 'E.g. cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317; E.g. cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
         )]
         [ValidateScript(
             {
                 if (Test-Path -Path $_) { $true } else {
-                
+
                     throw "An example proper path would be 'cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'."
                 }
             }
         )]
         [string]$CertificateStorePath,
 
+        [Parameter(ParameterSetName = 'ClientCredentials_Certificate')]
+        [Parameter(ParameterSetName = 'ClientCredentials_CertificateStorePath')]
         [ValidateRange(1, 10)]
-        [int16]$JWTExpMinutes = 2
+        [int16]$JWTExpMinutes = 2,
+
+        [Parameter(ParameterSetName = 'DeviceCode_Endpoint')]
+        [Parameter(ParameterSetName = 'RefreshToken_Endpoint')]
+        [ValidateSet('Common', 'Consumers', 'Organizations')]
+        [string]$Endpoint = 'Common',
+
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint')]
+        [Parameter(ParameterSetName = 'RefreshToken_TenantId')]
+        [Parameter(ParameterSetName = 'RefreshToken_Endpoint')]
+        [string[]]$Scopes,
+
+        [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshToken_Endpoint')]
+        [ValidateScript(
+            {
+                if ($_.token_type -eq 'Bearer' -and $_.refresh_token) { $true } else {
+
+                    throw 'Invalid access token.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken -Scopes offline_access...'
+                }
+            }
+        )]
+        [Object]$RefreshToken
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'CertificateStorePath') {
-
+    #region Initialization
+    if ($PSCmdlet.ParameterSetName -eq 'ClientCredentials_CertificateStorePath') {
         try {
             $Script:Certificate = Get-ChildItem -Path $CertificateStorePath -ErrorAction Stop
         }
         catch { throw $_ }
     }
-    else { $Script:Certificate = $Certificate }
+    elseif ($PSCmdlet.ParameterSetName -eq 'ClientCredentials_Certificate') {
 
-    if (-not (Test-CertificateProvider -Certificate $Script:Certificate)) {
-
-        $ErrorMessage = "The supplied certificate does not use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider'.  " +
-        "For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate."
-
-        throw $ErrorMessage
+        $Script:Certificate = $Certificate
     }
 
-    $NowUTC = [datetime]::UtcNow
+    if ($PSCmdlet.ParameterSetName -like 'ClientCredentials_*') {
 
-    $JWTHeader = @{
+        if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-        alg = 'RS256'
-        typ = 'JWT'
-        x5t = ConvertTo-Base64UrlFriendly -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
+            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            'and the SHA-256 hashing algorithm.  ' +
+            'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
+        }
     }
 
-    $JWTClaims = @{
+    if ($PSCmdlet.ParameterSetName -like '*_TenantId') { $Script:Endpoint = $TenantId } else { $Script:Endpoint = $Endpoint }
+    #endregion Initialization
 
-        aud = "https://login.microsoftonline.com/$TenantId/oauth2/token"
-        exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes) -UFormat '%s') -replace '\..*'
-        iss = $ApplicationId.Guid
-        jti = [Guid]::NewGuid()
-        nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
-        sub = $ApplicationId.Guid
-    }
+    #region Functions
+    function New-AppOnlyAccessToken ($TenantId, $ApplicationId, $Certificate, $JWTExpMinutes) {
+        try {
+            $NowUTC = [datetime]::UtcNow
 
-    $EncodedJWTHeader = [Convert]::ToBase64String(
-        
-        [Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $JWTHeader))
-    )
-    
-    $EncodedJWTClaims = [Convert]::ToBase64String(
-        
-        [Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject $JWTClaims))
-    )
-
-    $JWT = ConvertTo-Base64UrlFriendly -String ($EncodedJWTHeader + '.' + $EncodedJWTClaims)
-
-    $Signature = ConvertTo-Base64UrlFriendly -String ([Convert]::ToBase64String(
-        
-            $Script:Certificate.PrivateKey.SignData(
-            
-                [Text.Encoding]::UTF8.GetBytes($JWT),
-                [HashAlgorithmName]::SHA256,
-                [RSASignaturePadding]::Pkcs1
+            $EncodedHeader = [Convert]::ToBase64String(
+                [Text.Encoding]::UTF8.GetBytes(
+                    (ConvertTo-Json -InputObject (
+                            @{
+                                alg = 'RS256'
+                                typ = 'JWT'
+                                x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Certificate.GetCertHash()))
+                            }
+                        )
+                    )
+                )
             )
-        )
-    )
 
-    $JWT = $JWT + '.' + $Signature
+            $EncodedPayload = [Convert]::ToBase64String(
+                [Text.Encoding]::UTF8.GetBytes(
+                    (ConvertTo-Json -InputObject (
+                            @{
+                                aud = "https://login.microsoftonline.com/$TenantId/oauth2/token"
+                                exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes) -UFormat '%s') -replace '\..*'
+                                iss = $ApplicationId.Guid
+                                jti = [Guid]::NewGuid()
+                                nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
+                                sub = $ApplicationId.Guid
+                            }
+                        )
+                    )
+                )
+            )
 
-    $Body = @{
+            $JWT = (ConvertTo-Base64Url -String $EncodedHeader, $EncodedPayload) -join '.'
 
-        client_id             = $ApplicationId
-        client_assertion      = $JWT
-        client_assertion_type = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-        scope                 = 'https://graph.microsoft.com/.default'
-        grant_type            = "client_credentials"
+            $Signature = ConvertTo-Base64Url -String (
+                [Convert]::ToBase64String(
+                    $Script:Certificate.PrivateKey.SignData(
+                        [Text.Encoding]::UTF8.GetBytes($JWT),
+                        [HashAlgorithmName]::SHA256,
+                        [RSASignaturePadding]::Pkcs1
+                    )
+                )
+            )
+
+            $JWT = $JWT + '.' + $Signature
+
+            $trBody = @{
+
+                client_id             = $ApplicationId
+                client_assertion      = $JWT
+                client_assertion_type = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+                scope                 = 'https://graph.microsoft.com/.default'
+                grant_type            = "client_credentials"
+            }
+
+            $trParams = @{
+
+                Method      = 'POST'
+                Uri         = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token"
+                Body        = $trBody
+                Headers     = @{ Authorization = "Bearer $($JWT)" }
+                ContentType = 'application/x-www-form-urlencoded'
+                ErrorAction = 'Stop'
+            }
+
+            $trResponse = Invoke-RestMethod @trParams
+
+            # Output the token request response:
+            $trResponse
+        }
+        catch { throw $_ }
     }
 
-    $TokenRequestParams = @{
+    function New-DeviceCodeAccessToken ($Endpoint, $ApplicationId, $Scopes) {
+        try {
+            $dcrBody = @(
+                "client_id=$($ApplicationId)",
+                "scope=$($Scopes -join ' ')"
+            ) -join '&'
 
-        Method      = 'POST'
-        Uri         = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token"
-        Body        = $Body
-        Headers     = @{ Authorization = "Bearer $($JWT)" }
-        ContentType = 'application/x-www-form-urlencoded'
-        ErrorAction = 'Stop'
+            $dcrParams = @{
+
+                Method      = 'POST'
+                Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/devicecode"
+                Body        = $dcrBody
+                ContentType = 'application/x-www-form-urlencoded'
+                ErrorAction = 'Stop'
+            }
+            $dcrResponse = Invoke-RestMethod @dcrParams
+
+            $dtNow = [datetime]::Now
+            $sw1 = [Diagnostics.Stopwatch]::StartNew()
+            $dcExpiration = "$($dtNow.AddSeconds($dcrResponse.expires_in).ToString('yyyy-MM-dd hh:mm:ss tt'))"
+
+            $trBody = @(
+                "grant_type=urn:ietf:params:oauth:grant-type:device_code",
+                "client_id=$($ApplicationId)",
+                "device_code=$($dcrResponse.device_code)"
+            ) -join '&'
+
+            # Wait for user to enter code before starting to poll token endpoint:
+            switch (
+                $host.UI.PromptForChoice(
+
+                    "Authorization started (expires at $($dcExpiration)",
+                    "$($dcrResponse.message)",
+                    [ChoiceDescription]('&Done'),
+                    0
+                )
+            ) { 0 { <##> } }
+
+            if ($sw1.Elapsed.Minutes -lt 15) {
+
+                $sw2 = [Diagnostics.Stopwatch]::StartNew()
+                $successfulResponse = $false
+                $pollCount = 0
+                do {
+                    if ($sw2.Elapsed.Seconds -ge $dcrResponse.interval) {
+
+                        $sw2.Restart()
+                        $pollCount++
+
+                        try {
+                            $trParams = @{
+
+                                Method      = 'POST'
+                                Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
+                                Body        = $trBody
+                                ContentType = 'application/x-www-form-urlencoded'
+                                ErrorAction = 'Stop'
+                            }
+                            $trResponse = Invoke-RestMethod @trParams
+                            $successfulResponse = $true
+                        }
+                        catch {
+                            if ($_.ErrorDetails.Message) {
+
+                                $badResponse = ConvertFrom-Json -InputObject $_.ErrorDetails.Message
+
+                                if ($badResponse.error -eq 'authorization_pending') {
+
+                                    if ($pollCount -eq 1) {
+
+                                        "The user hasn't finished authenticating, but hasn't canceled the flow (error: authorization_pending).  " +
+                                        "Continuing to poll the token endpoint at the requested interval ($($dcrResponse.interval) seconds)." |
+                                        Write-Warning
+                                    }
+                                }
+                                elseif ($badResponse.error -match '^(authorization_declined)|(bad_verification_code)|(expired_token)$') {
+
+                                    # https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code#expected-errors
+                                    throw "Authorization failed due to foreseeable error: $($badResponse.error)."
+                                }
+                                else {
+                                    Write-Warning 'Authorization failed due to an unexpected error.'
+                                    throw $badResponse.error_description
+                                }
+                            }
+                            else {
+                                Write-Warning 'An error was encountered with the Invoke-RestMethod command.  Authorization request did not complete.'
+                                throw $_
+                            }
+                        }
+                    }
+                    if (-not $successfulResponse) { Start-Sleep -Seconds 1 }
+                }
+                while ($sw1.Elapsed.Minutes -lt 15 -and -not $successfulResponse)
+
+                # Output the token request response:
+                $trResponse
+            }
+            else {
+                throw "Authorization request expired at $($dcExpiration), please try again."
+            }
+        }
+        catch { throw $_ }
     }
 
-    try {
-        Invoke-RestMethod @TokenRequestParams
+    function Get-RefreshedAcessToken ($Endpoint, $ApplicationId, $RefreshToken, $Scopes) {
+        try {
+            $trBody = @(
+                "client_id=$($ApplicationId)",
+                'grant_type=refresh_token',
+                "refresh_token=$($RefreshToken.refresh_token)"
+            )
+            if ($Scopes) { $trBody += "scope=$($Scopes -join ' ')" }
+
+            $trBody = $trBody -join '&'
+
+            $trParams = @{
+
+                Method      = 'POST'
+                Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
+                Body        = $trBody
+                ContentType = 'application/x-www-form-urlencoded'
+                ErrorAction = 'Stop'
+            }
+            $trResponse = Invoke-RestMethod @trParams
+
+            # Output the token request response:
+            $trResponse
+        }
+        catch { throw $_ }
     }
-    catch { throw $_ }
+    #endregion Functions
+
+    #region Main
+    switch -Wildcard ($PSCmdlet.ParameterSetName) {
+
+        'ClientCredentials_*' {
+
+            New-AppOnlyAccessToken $TenantId $ApplicationId $Script:Certificate $JWTExpMinutes
+        }
+
+        'DeviceCode_*' {
+
+            New-DeviceCodeAccessToken $Script:Endpoint $ApplicationId $Scopes
+        }
+
+        'RefreshToken_*' {
+
+            Get-RefreshedAcessToken $Script:Endpoint $ApplicationId $RefreshToken $Scopes
+        }
+    }
+    #endregion Main
 }
 
 function New-MSGraphRequest {
@@ -143,15 +336,14 @@ function New-MSGraphRequest {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [Alias('Query')]
         [string]$Request,
 
         [Parameter(Mandatory)]
         [ValidateScript(
             {
-                if ($_.token_type -eq 'Bearer' -and $_.access_token -match '^[-\w]+\.[-\w]+\.[-\w]+$') { $true } else {
+                if ($_.token_type -eq 'Bearer' -and $_.access_token) { $true } else {
 
-                    throw 'Invalid access token.  For best results, supply $AccessToken where: $AccessToken = New-MSGraphAccessToken ...'
+                    throw 'Invalid access token.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken ...'
                 }
             }
         )]
@@ -170,84 +362,80 @@ function New-MSGraphRequest {
         [string]$nextLinkAction = 'Warn'
     )
 
-    $RequestParams = @{
-
-        Headers     = @{ Authorization = "Bearer $($AccessToken.access_token)" }
-        Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
-        Method      = $Method
-        ContentType = 'application/json'
-        ErrorAction = 'Stop'
-    }
-
-    if ($PSBoundParameters.ContainsKey('Body')) {
-        
-        if ($Method -notmatch '(POST)|(PATCH)') {
-
-            throw "Body is not allowed when the method is $($Method), only POST or PATCH."
-        }
-        else { $RequestParams['Body'] = $Body }
-    }
-
     try {
+        $RequestParams = @{
+
+            Headers     = @{ Authorization = "Bearer $($AccessToken.access_token)" }
+            Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
+            Method      = $Method
+            ContentType = 'application/json'
+            ErrorAction = 'Stop'
+        }
+
+        if ($PSBoundParameters.ContainsKey('Body')) {
+
+            if ($Method -notmatch '(POST)|(PATCH)') {
+
+                throw "Body is not allowed when the method is $($Method), only POST or PATCH."
+            }
+            else { $RequestParams['Body'] = $Body }
+        }
+
         Invoke-RestMethod @RequestParams -OutVariable requestResponse
-    }
-    catch { throw $_ }
 
-    if ($requestResponse.'@odata.nextLink') {
+        if ($requestResponse.'@odata.nextLink') {
 
-        $Script:Continue = $true
+            $Script:Continue = $true
 
-        switch ($nextLinkAction) {
+            switch ($nextLinkAction) {
 
-            Warn {
-                Write-Warning -Message "There are more results available. Next page: $($requestResponse.'@odata.nextLink')"
-                $Script:Continue = $false
-            }
-            Continue {
-                Write-Information -MessageData 'There are more results available.  Getting the next page' -InformationAction Continue
+                Warn {
+                    Write-Warning -Message "There are more results available. Next page: $($requestResponse.'@odata.nextLink')"
+                    $Script:Continue = $false
+                }
+                'Continue' {
+                    Write-Information -MessageData 'There are more results available.  Getting the next page...' -InformationAction Continue
 
-            }
-            Inquire {
-                switch (
-                    $host.UI.PromptForChoice(
+                }
+                Inquire {
+                    switch (
+                        $host.UI.PromptForChoice(
 
-                        'There are more results available (i.e. response included @odata.nextLink).',
-                        'Get more results?',
-                        [ChoiceDescription[]]@('&Yes', 'Yes to &All', '&No'),
-                        2
-                    )
-                ) {
-                    0 {} # Will prompt for choice again if the next response includes another @odata.nextLink.
-                    1 { $nextLinkAction = 'SilentlyContinue' }
-                    2 { $Script:Continue = $false }
+                            'There are more results available (i.e. response included @odata.nextLink).',
+                            'Get more results?',
+                            [ChoiceDescription[]]@('&Yes', 'Yes to &All', '&No'),
+                            2
+                        )
+                    ) {
+                        0 { <# Will prompt for choice again if the next response includes another @odata.nextLink.#> }
+                        1 { $nextLinkAction = 'SilentlyContinue' }
+                        2 { $Script:Continue = $false }
+                    }
                 }
             }
-        }
 
-        if ($Script:Continue) {
+            if ($Script:Continue) {
 
-            $nextLinkRequestParams = @{
-                AccessToken    = $AccessToken
-                ApiVersion     = $ApiVersion
-                Request        = "$($requestResponse.'@odata.nextLink' -replace 'https://graph.microsoft.com/(v1\.0|beta)/')"
-                nextLinkAction = $nextLinkAction
-                ErrorAction    = 'Stop'
-            }
+                $nextLinkRequestParams = @{
+                    AccessToken    = $AccessToken
+                    ApiVersion     = $ApiVersion
+                    Request        = "$($requestResponse.'@odata.nextLink' -replace 'https://graph.microsoft.com/(v1\.0|beta)/')"
+                    nextLinkAction = $nextLinkAction
+                    ErrorAction    = 'Stop'
+                }
 
-            try {
                 New-MSGraphRequest @nextLinkRequestParams
             }
-            catch { throw $_ }
         }
     }
+    catch { throw $_ }
 }
-New-Alias -Name New-MSGraphQuery -Value New-MSGraphRequest
 
 function New-SelfSignedMSGraphApplicationCertificate {
     [CmdletBinding()]
     param (
         [ValidatePattern('(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)')]
-        [string]$DnsName,    
+        [string]$DnsName,
 
         [Parameter(Mandatory)]
         [string]$FriendlyName,
@@ -281,9 +469,7 @@ function New-SelfSignedMSGraphApplicationCertificate {
         ErrorAction       = 'Stop'
     }
 
-    try {
-        New-SelfSignedCertificate @NewCertParams
-    }
+    try { New-SelfSignedCertificate @NewCertParams }
     catch { throw $_ }
 }
 New-Alias -Name 'New-SelfSignedAzureADAppRegistrationCertificate' -Value New-SelfSignedMSGraphApplicationCertificate
@@ -312,7 +498,7 @@ function New-MSGraphPoPToken {
         [ValidateScript(
             {
                 if (Test-Path -Path $_) { $true } else {
-                
+
                     throw "An example proper path would be 'cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'."
                 }
             }
@@ -323,66 +509,67 @@ function New-MSGraphPoPToken {
         [int16]$JWTExpMinutes = 2
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'CertificateStorePath') {
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'CertificateStorePath') {
 
-        try {
             $Script:Certificate = Get-ChildItem -Path $CertificateStorePath -ErrorAction Stop
         }
-        catch { throw $_ }
-    }
-    else { $Script:Certificate = $Certificate }
+        else { $Script:Certificate = $Certificate }
 
-    if (-not (Test-CertificateProvider -Certificate $Script:Certificate)) {
+        if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-        $ErrorMessage = "The supplied certificate does not use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider'.  " +
-        "For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate."
+            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            'and the SHA-256 hashing algorithm.  ' +
+            'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
+        }
 
-        throw $ErrorMessage
-    }
+        $NowUTC = [datetime]::UtcNow
 
-    $NowUTC = [datetime]::UtcNow
-
-    $JWTHeader = @{
-
-        alg = 'RS256'
-        typ = 'JWT'
-        x5t = ConvertTo-Base64UrlFriendly -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
-    }
-
-    $JWTClaims = @{
-
-        aud = '00000002-0000-0000-c000-000000000000'
-        iss = $ApplicationObjectId.Guid
-        exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes) -UFormat '%s') -replace '\..*'
-        nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
-    }
-
-    $EncodedJWTHeader = [Convert]::ToBase64String(
-        
-        [Text.Encoding]::UTF8.GetBytes(($JWTHeader | ConvertTo-Json))
-    )
-    
-    $EncodedJWTClaims = [Convert]::ToBase64String(
-        
-        [Text.Encoding]::UTF8.GetBytes(($JWTClaims | ConvertTo-Json))
-    )
-
-    $JWT = ConvertTo-Base64UrlFriendly ($EncodedJWTHeader + '.' + $EncodedJWTClaims)
-
-    $Signature = ConvertTo-Base64UrlFriendly ([Convert]::ToBase64String(
-        
-            $Script:Certificate.PrivateKey.SignData(
-            
-                [Text.Encoding]::UTF8.GetBytes($JWT),
-                [HashAlgorithmName]::SHA256,
-                [RSASignaturePadding]::Pkcs1
+        $EncodedHeader = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes(
+                (ConvertTo-Json -InputObject (
+                        @{
+                            alg = 'RS256'
+                            typ = 'JWT'
+                            x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
+                        }
+                    )
+                )
             )
         )
-    )
 
-    $JWT = $JWT + '.' + $Signature
+        $EncodedPayload = [Convert]::ToBase64String(
+            [Text.Encoding]::UTF8.GetBytes(
+                (ConvertTo-Json -InputObject (
+                        @{
+                            aud = '00000002-0000-0000-c000-000000000000'
+                            iss = $ApplicationObjectId.Guid
+                            exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes)-UFormat '%s') -replace '\..*'
+                            nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
+                        }
+                    )
+                )
+            )
+        )
 
-    $JWT
+        $JWT = (ConvertTo-Base64Url -String $EncodedHeader, $EncodedPayload) -join '.'
+
+        $Signature = ConvertTo-Base64Url -String (
+            [Convert]::ToBase64String(
+                $Script:Certificate.PrivateKey.SignData(
+                    [Text.Encoding]::UTF8.GetBytes($JWT),
+                    [HashAlgorithmName]::SHA256,
+                    [RSASignaturePadding]::Pkcs1
+                )
+            )
+        )
+
+        $JWT = $JWT + '.' + $Signature
+
+        # Output the token:
+        $JWT
+    }
+    catch { throw $_ }
 }
 
 function Add-MSGraphApplicationKeyCredential {
@@ -392,13 +579,13 @@ function Add-MSGraphApplicationKeyCredential {
     param (
         [Parameter(Mandatory)]
         [Guid]$ApplicationObjectId,
-        
+
         [Parameter(Mandatory)]
         [ValidateScript(
             {
-                if ($_.token_type -eq 'Bearer' -and $_.access_token -match '^[-\w]+\.[-\w]+\.[-\w]+$') { $true } else {
+                if ($_.token_type -eq 'Bearer' -and $_.access_token) { $true } else {
 
-                    throw 'Invalid access token.  For best results, supply $AccessToken where: $AccessToken = New-MSGraphAccessToken ...'
+                    throw 'Invalid access token.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken ...'
                 }
             }
         )]
@@ -407,7 +594,7 @@ function Add-MSGraphApplicationKeyCredential {
         [Parameter(Mandatory)]
         [ValidatePattern('^[-\w]+\.[-\w]+\.[-\w]+$')]
         [string]$PoPToken,
-    
+
         [Parameter(
             Mandatory,
             ParameterSetName = 'Certificate',
@@ -423,7 +610,7 @@ function Add-MSGraphApplicationKeyCredential {
         [ValidateScript(
             {
                 if (Test-Path -Path $_) { $true } else {
-                
+
                     throw "An example proper path would be 'cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'."
                 }
             }
@@ -431,44 +618,40 @@ function Add-MSGraphApplicationKeyCredential {
         [string]$CertificateStorePath
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'CertificateStorePath') {
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'CertificateStorePath') {
 
-        try {
             $Script:Certificate = Get-ChildItem -Path $CertificateStorePath -ErrorAction Stop
         }
-        catch { throw $_ }
-    }
-    else { $Script:Certificate = $Certificate }
+        else { $Script:Certificate = $Certificate }
 
-    if (-not (Test-CertificateProvider -Certificate $Script:Certificate)) {
+        if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-        $ErrorMessage = "The supplied certificate does not use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider'.  " +
-        "For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate."
-
-        throw $ErrorMessage
-    }
-
-    $Body = @{
-
-        proof         = $PoPToken
-        keyCredential = @{
-    
-            type  = "AsymmetricX509Cert"
-            usage = "Verify"
-            key   = [Convert]::ToBase64String($Script:Certificate.GetRawCertData())
+            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            'and the SHA-256 hashing algorithm.  ' +
+            'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
         }
-    }
-    
-    $AddKeyParams = @{
-    
-        AccessToken = $AccessToken
-        Method      = 'POST'
-        Request     = "applications/$($ApplicationObjectId)/addKey"
-        Body        = (ConvertTo-Json $Body)
-        ErrorAction = 'Stop'
-    }
-    
-    try {
+
+        $Body = @{
+
+            proof         = $PoPToken
+            keyCredential = @{
+
+                type  = "AsymmetricX509Cert"
+                usage = "Verify"
+                key   = [Convert]::ToBase64String($Script:Certificate.GetRawCertData())
+            }
+        }
+
+        $AddKeyParams = @{
+
+            AccessToken = $AccessToken
+            Method      = 'POST'
+            Request     = "applications/$($ApplicationObjectId)/addKey"
+            Body        = (ConvertTo-Json $Body)
+            ErrorAction = 'Stop'
+        }
+
         New-MSGraphRequest @AddKeyParams
     }
     catch { throw $_ }
@@ -481,13 +664,13 @@ function Remove-MSGraphApplicationKeyCredential {
     param (
         [Parameter(Mandatory)]
         [Guid]$ApplicationObjectId,
-        
+
         [Parameter(Mandatory)]
         [ValidateScript(
             {
-                if ($_.token_type -eq 'Bearer' -and $_.access_token -match '^[-\w]+\.[-\w]+\.[-\w]+$') { $true } else {
+                if ($_.token_type -eq 'Bearer' -and $_.access_token) { $true } else {
 
-                    throw 'Invalid access token.  For best results, supply $AccessToken where: $AccessToken = New-MSGraphAccessToken ...'
+                    throw 'Invalid access token.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken ...'
                 }
             }
         )]
@@ -511,69 +694,107 @@ function Remove-MSGraphApplicationKeyCredential {
         [Guid]$KeyId
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'CertificateThumbprint') {
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'CertificateThumbprint') {
 
-        $ListKeysParams = @{
+            $ListKeysParams = @{
+
+                AccessToken = $AccessToken
+                Request     = "applications/$($ApplicationObjectId)"
+                ErrorAction = 'Stop'
+            }
+
+            $KeyCredentials = New-MSGraphRequest @ListKeysParams
+
+            $Script:KeyId = ($KeyCredentials.KeyCredentials |
+                Where-Object { $_.customKeyIdentifier -eq $CertificateThumbprint }).KeyId
+
+            if (-not $Script:KeyId) {
+
+                throw "No KeyCredential was found with certificate thumbprint $($CertificateThumbprint)."
+            }
+        }
+        else { $Script:KeyId = $KeyId.Guid }
+
+        $Body = @{
+
+            keyId = $Script:KeyId
+            proof = $PoPToken
+        }
+
+        $RemoveKeyParams = @{
 
             AccessToken = $AccessToken
-            Request     = "applications/$($ApplicationObjectId)"
+            Request     = "applications/$($ApplicationObjectId)/removeKey"
+            Method      = 'POST'
+            Body        = (ConvertTo-Json $Body)
             ErrorAction = 'Stop'
         }
 
-        try {
-            $KeyCredentials = New-MSGraphRequest @ListKeysParams
-        }
-        catch { throw $_ }
-
-        $Script:KeyId = ($KeyCredentials.KeyCredentials |
-            Where-Object { $_.customKeyIdentifier -eq $CertificateThumbprint }).KeyId
-
-        if (-not $Script:KeyId) {
-
-            throw "No KeyCredential was found with certificate thumbprint $($CertificateThumbprint)."
-        }
-    }
-    else {
-        $Script:KeyId = $KeyId.Guid
-    }
-
-    $Body = @{
-    
-        keyId = $Script:KeyId
-        proof = $PoPToken
-    }
-
-    $RemoveKeyParams = @{
-
-        AccessToken = $AccessToken
-        Request     = "applications/$($ApplicationObjectId)/removeKey"
-        Method      = 'POST'
-        Body        = (ConvertTo-Json $Body)
-        ErrorAction = 'Stop'
-    }
-
-    try {
         New-MSGraphRequest @RemoveKeyParams
     }
     catch { throw $_ }
 }
 
-function ConvertTo-Base64UrlFriendly ([string]$String) {
+function Test-SigningCertificate ([X509Certificate2]$Certificate) {
+
+    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+
+        $Provider = $Certificate.PrivateKey.CspKeyContainerInfo.ProviderName
+    }
+    else { $Provider = $Certificate.PrivateKey.Key.Provider }
+
+    if (
+        $Provider -eq 'Microsoft Enhanced RSA and AES Cryptographic Provider' -and
+        $Certificate.SignatureAlgorithm.FriendlyName -match '(sha256)'
+    ) {
+        $true
+    }
+    else { $false }
+}
+
+function ConvertTo-Base64Url {
+    param (
+        [ValidatePattern('^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})$')]
+        [string[]]$String
+    )
 
     $String -replace '\+', '-' -replace '/', '_' -replace '='
 }
 
-function Test-CertificateProvider ([X509Certificate2]$Certificate) {
+function ConvertFrom-Base64Url ([string[]]$String) {
 
-    if ($PSVersionTable.PSEdition -eq 'Desktop') {
+    foreach ($s in $String) {
 
-        $certProvider = $Certificate.PrivateKey.CspKeyContainerInfo.ProviderName
+        while ($s.Length % 4) { $s += '=' }
+        $s -replace '-', '\+' -replace '_', '/'
     }
-    else { $certProvider = $Certificate.PrivateKey.Key.Provider }
+}
 
-    if ($certProvider -eq 'Microsoft Enhanced RSA and AES Cryptographic Provider') {
+function ConvertFrom-JWTAccessToken {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateScript(
+            {
+                if ($_ -match '^eyJ[-\w]+\.[-\w]+\.[-\w]+$') { $true } else { throw 'Invalid JWT.' }
+            }
+        )]
+        [Object]$JWT
+    )
 
-        $true
+    $Headers, $Claims = ($JWT -split '\.')[0, 1]
+
+    [PSCustomObject]@{
+        Headers = ConvertFrom-Json (
+            [Text.Encoding]::ASCII.GetString(
+                [Convert]::FromBase64String((ConvertFrom-Base64Url $Headers))
+            )
+        )
+        Payload = ConvertFrom-Json(
+            [Text.Encoding]::ASCII.GetString(
+                [Convert]::FromBase64String((ConvertFrom-Base64Url $Claims))
+            )
+        )
     }
-    else { $false }
 }
