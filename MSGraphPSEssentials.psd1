@@ -10,7 +10,7 @@
     Author               = 'Jeremy.Bradshaw@Outlook.com'
     CompanyName          = ''
     Copyright            = '(c) 2020 Jeremy Bradshaw. All rights reserved.'
-    Description          = 'A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core)'
+    Description          = 'A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core).'
     PowerShellVersion    = '5.1'
     FunctionsToExport    = @(
         'New-MSGraphAccessToken',
@@ -19,6 +19,9 @@
         'New-MSGraphPoPToken',
         'Add-MSGraphApplicationKeyCredential',
         'Remove-MSGraphApplicationKeyCredential',
+        'Test-SigningCertificate',
+        'ConvertTo-Base64Url',
+        'ConvertFrom-Base64Url',
         'ConvertFrom-JWTAccessToken'
     )
     CmdletsToExport      = @()
@@ -31,9 +34,9 @@
             LicenseUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials'
             ReleaseNotes = @'
-v0.1.0 - Initial version (Unpublished as of 2020-12-16):
-- Need to do some final testing to ensure everything works.
-- It is definitely close, possibly ready now.
+v0.1.0 - Initial version (2020-12-16):
+- Fairly thorough testing and debugging has been completed.
+- Ready for takeoff.
 '@
         }
     }

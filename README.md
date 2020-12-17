@@ -287,17 +287,76 @@ Remove-MSGraphApplicationKeyCredential @removeKeyParams
 
 ## Utility Functions
 
+### Test-SigningCertificate
+
+This is a simple utilty function used by some of the essential functions to verify the certificate is using the 'Microsoft Enhanced RSA and AES Cryptographic Provider' and SHA-256 hashing algorigthm.  These two things ensure everything will work as planned with the certificate and these functions.
+
+Parameters | Description
+---------: | :-----------
+Certificate | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
+
+**Example 1**
+
+```powershell
+$Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+Test-SigningCertificate $Certificate
+# Output will be True or False
+```
+
 ### ConvertTo-Base64Url
 
-*(description coming soon)*
+This utility function is used every in this module that deals with JWT's.  Many things inside a JWT (for these purposes anyway) need to be encoded as Base64.  Since Base64 contains some characters that aren't web-friendly, Base64Url to the rescue.
+
+Parameters | Description
+---------: | :-----------
+String | One or more Base64 encoded strings.
+
+**Example 1**
+
+```powershell
+$Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+ConvertTo-Base64Url -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
+# Output will be a Base64Url representation of the certificate's hash.
+```
 
 ### ConvertFrom-Base64Url
 
-*(description coming soon)*
+Much like ConvertTo-Base64Url, just in the opposite direction.
+
+Parameters | Description
+---------: | :-----------
+String | One or more Base64Url encoded strings.
+
+**Example 1**
+
+```powershell
+$Headers, $Payload = ($TokenObject.access_token -split '\.')[0,1] |
+Foreach-Object { ConvertFrom-Base64Url -String $_ }
+# Output will be two Base64 strings, which are the first 2 of 3 parts of the JWT that is the access token.
+```
 
 ### ConvertFrom-JWTAccessToken
 
-*(description coming soon)*
+This utility function is not actually used by any other functions in this module.  It is simply included to give an easy way to inspect access tokens and see what headers and claims they contain.  Note that MSA (Microsoft Account) access tokens are different and won't work with this function.  Nor will refresh tokens.  Just access tokens from Azure AD for use with organizations.
+
+Parameters | Description
+---------: | :-----------
+JWT | Use `$TokenObject.access_token` where `$TokenObject = New-MSGraphAccessToken ...`.
+
+**Example 1**
+
+```powershell
+$TokenObjectParams = @{
+
+    ApplicationId = '309f2789-a5ea-4b3a-92ea-687d54249613'
+    TenantId      = '1098c395-c09a-4c84-8e5e-2f454f318667'
+    Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+}
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
+
+ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -ExpandProperty Headers
+ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -ExpandProperty Payload
+```
 
 ## Next Steps
 

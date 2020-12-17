@@ -5,14 +5,14 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.1.0 - Initial version (Unpublished as of 2020-12-16):
+    v0.1.0 - Initial version (2020-12-16):
 
-    - Need to do some final testing to ensure everything works.
-    - It is definitely close, possibly ready now.
+    - Fairly thorough testing and debugging has been completed.
+    - Ready for takeoff.
+    - Consult the module manifest for HelpInfoUri.
 #>
 
 function New-MSGraphAccessToken {
-
     [CmdletBinding(
         DefaultParameterSetName = 'DeviceCode_Endpoint'
     )]
@@ -58,8 +58,8 @@ function New-MSGraphAccessToken {
         [ValidateSet('Common', 'Consumers', 'Organizations')]
         [string]$Endpoint = 'Common',
 
-        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
-        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint')]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId', HelpMessage = 'E.g. Mail.Send, Ews.AccessAsUser.All')]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint', HelpMessage = 'E.g. Mail.Send, Ews.AccessAsUser.All')]
         [Parameter(ParameterSetName = 'RefreshToken_TenantId')]
         [Parameter(ParameterSetName = 'RefreshToken_Endpoint')]
         [string[]]$Scopes,
@@ -257,6 +257,11 @@ function New-MSGraphAccessToken {
                                     # https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code#expected-errors
                                     throw "Authorization failed due to foreseeable error: $($badResponse.error)."
                                 }
+                                elseif ($_.errorDetails.message -match '(AADSTS7000218)') {
+
+                                    throw "Authorization failed due to 'invalid_client' (AADSTS7000218). " +
+                                    'Ensure the Application is enabled for public client flows in Azure AD.'
+                                }
                                 else {
                                     Write-Warning 'Authorization failed due to an unexpected error.'
                                     throw $badResponse.error_description
@@ -279,7 +284,15 @@ function New-MSGraphAccessToken {
                 throw "Authorization request expired at $($dcExpiration), please try again."
             }
         }
-        catch { throw $_ }
+        catch {
+            if ($_.errorDetails.message -match '(AADSTS50059)') {
+
+                throw "Authorization failed due to 'invalid_request' (AADSTS50059). " +
+                'Ensure the Application is enabled for public client flows in Azure AD. ' +
+                'Alternatively, try a different endpoint (with -Endpoint, or supply -TenantId).'
+            }
+            else { throw $_ }
+        }
     }
 
     function Get-RefreshedAcessToken ($Endpoint, $ApplicationId, $RefreshToken, $Scopes) {
@@ -332,7 +345,6 @@ function New-MSGraphAccessToken {
 }
 
 function New-MSGraphRequest {
-
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
@@ -697,22 +709,31 @@ function Remove-MSGraphApplicationKeyCredential {
     try {
         if ($PSCmdlet.ParameterSetName -eq 'CertificateThumbprint') {
 
-            $ListKeysParams = @{
+            $GetApplicationParams = @{
 
                 AccessToken = $AccessToken
                 Request     = "applications/$($ApplicationObjectId)"
                 ErrorAction = 'Stop'
             }
 
-            $KeyCredentials = New-MSGraphRequest @ListKeysParams
+            $Application = New-MSGraphRequest @GetApplicationParams
 
-            $Script:KeyId = ($KeyCredentials.KeyCredentials |
-                Where-Object { $_.customKeyIdentifier -eq $CertificateThumbprint }).KeyId
+            $MatchingKeyCredentials = $Application.keyCredentials |
+            Where-Object { $_.customKeyIdentifier -eq $CertificateThumbprint }
 
-            if (-not $Script:KeyId) {
+            if ($MatchingKeyCredentials.Count -gt 1) {
+
+                "Multiple keyCredentials matching certificate thumbprint $($CertificateThumbprint) were found.  " +
+                "List these with the command below, then re-run this command using -KeyId instead of -CertificateThumbprint:`n" +
+                "New-MSGraphRequest -AccessToken <AccessTokenObject> -Request 'applications/$($ApplicationObjectId)' | select -expand keyCredentials" |
+                Write-Warning
+                break
+            }
+            elseif ($MatchingKeyCredentials.Count -lt 1) {
 
                 throw "No KeyCredential was found with certificate thumbprint $($CertificateThumbprint)."
             }
+            else { $Script:KeyId = $MatchingKeyCredentials.KeyId }
         }
         else { $Script:KeyId = $KeyId.Guid }
 
@@ -783,7 +804,7 @@ function ConvertFrom-JWTAccessToken {
         [Object]$JWT
     )
 
-    $Headers, $Claims = ($JWT -split '\.')[0, 1]
+    $Headers, $Payload = ($JWT -split '\.')[0, 1]
 
     [PSCustomObject]@{
         Headers = ConvertFrom-Json (
@@ -793,7 +814,7 @@ function ConvertFrom-JWTAccessToken {
         )
         Payload = ConvertFrom-Json(
             [Text.Encoding]::ASCII.GetString(
-                [Convert]::FromBase64String((ConvertFrom-Base64Url $Claims))
+                [Convert]::FromBase64String((ConvertFrom-Base64Url $Payload))
             )
         )
     }
