@@ -1,11 +1,13 @@
 # MSGraphPSEssentials
 A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core).
 
-This module is the successor of [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which is geared specifically towards App-Only use cases.  With this module, I've broadened the scope to support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're commonly limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
+[Available on PowerShell Gallery](https://www.linkedin.com/in/jeremytbradshaw/)
+
+This module is the successor to [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which was geared specifically towards App-Only use cases.  With this module, I've broadened the scope to support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're commonly limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
 
 The module provides six essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only fashion using certificate credentials, _**or**_ in Delegated fashion, using Device Code flow (and/or Refresh Tokens).  There are a few other short and sweet utility functions included as well.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD and upload the initial certificate (for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with New-MSGraphRequest.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
 
-**Come back soon to see updates that are coming to this page.  I'll also be building the Wiki and enabling Discussions.**
+**Come back soon to see the Wiki which will be created in the very near future (and maintained going forward).**
 
 ---
 
@@ -360,14 +362,14 @@ ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -Expan
 
 ## Next Steps
 
-ℹ**Up next:** I will be publishing the initial release to the PowerShell Gallery as v0.1.0.  The only reason for the low version number is to give myself room to make incremental updates until I'm ready to unveil it as v1.0.0.  I certainly feel as though it's ready for use anytime now though, so please don't hold back.
-
-Once the initial version of this module is publshed to the PoweShell Gallery, I hope to then start focusing on producing scripts that actually make use of this stuff, to drive some visibility into how/when/why to use this module.  Example ideas are:
+ℹ**Up next:** Now that the initial version of this module is published to the PowerShell Gallery, I will be focusing more on producing scripts that actually make use of this stuff, to drive some visibility into how/when/why to use this module.  Samples will be included in this repo as well as documented in the wiki.  Example ideas are:
 
 - (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/New-LargeItemsSearchFolder.ps1)
 - Script to reorganize large mailboxes into folders by year.  This could be used by Outlook.com users and Exchange Online users alike, and for the latter, either admins for bulk-usage, or individual users.
 - Similar scripts, but for OneDrive / OneDrive for Business.
 - ...and more, along these lines.
+
+The next planned addition to the module itself will be a function to help with [batching bulk requests to the $batch MS Graph endpoint](https://docs.microsoft.com/en-us/graph/json-batching).  I'm still deciding if this task would be better-suited to a script rather than a function in the module.  Either way, I will be getting it done, have done so already in my own scripts, so it's just a matter of time before it's ready to be shared in its final form.
 
 ## References
 
