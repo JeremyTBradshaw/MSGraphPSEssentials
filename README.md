@@ -1,7 +1,7 @@
 # MSGraphPSEssentials
 A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core).
 
-[Available on PowerShell Gallery](https://www.linkedin.com/in/jeremytbradshaw/)
+[Available on PowerShell Gallery](https://www.powershellgallery.com/packages/MSGraphPSEssentials)
 
 This module is the successor to [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which was geared specifically towards App-Only use cases.  With this module, I've broadened the scope to support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're commonly limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
 
