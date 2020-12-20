@@ -5,11 +5,9 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.1.0 - Initial version (2020-12-16):
+    v0.1.1 - (unpublished as of 2020-12-19):
 
-    - Fairly thorough testing and debugging has been completed.
-    - Ready for takeoff.
-    - Consult the module manifest for HelpInfoUri.
+    - Fixed missing ')' in the Device Code choice prompt caption.
 #>
 
 function New-MSGraphAccessToken {
@@ -208,7 +206,7 @@ function New-MSGraphAccessToken {
             switch (
                 $host.UI.PromptForChoice(
 
-                    "Authorization started (expires at $($dcExpiration)",
+                    "Authorization started (expires at $($dcExpiration))",
                     "$($dcrResponse.message)",
                     [ChoiceDescription]('&Done'),
                     0

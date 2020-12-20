@@ -7,27 +7,30 @@ This module is the successor to [MSGraphAppOnlyEssentials](https://github.com/Je
 
 The module provides six essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only fashion using certificate credentials, _**or**_ in Delegated fashion, using Device Code flow (and/or Refresh Tokens).  There are a few other short and sweet utility functions included as well.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD and upload the initial certificate (for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with New-MSGraphRequest.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
 
-**Come back soon to see the Wiki which will be created in the very near future (and maintained going forward).**
-
 ---
 
 ## (Essential) Functions
 
 ### New-MSGraphAccessToken
 
-*ℹ**Note:** This function recently received major updates, adding Device Code flow for getting delegated access tokens, and ability to refresh access tokens using refresh tokens.  I'll be updating the description, parameters, and examples soon.  In the meantime, the information below is still 100% relevant/working.*
-
 This function is used to get an access token.  Access tokens last for 1 hour, so keep this in mind in long-running scripts.
 
-Parameters | Description
----------: | :-----------
-ApplicationId | The app's ApplicationId (a.k.a. ClientId)
-TenantId | The directory/tenant ID (Guid)
-Certificate<br />(Option 1) | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
-CertificateStorePath<br/>(Option 2) | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
-JWTExpMinutes | In case of a poorly-synced clock, use this to adjust the expiry of the JWT that is the client assertion sent in the request.  Max. value is 10.
+ℹ **Note:** For a less-powerful (security-wise) alternative to app-only access tokens, you may find that you can accomplish enough unattended'ness by interatively requesting the initial access token using Device Code flow, and then programmatically refreshing the access token before the refresh token expires.  As long as the refresh token is never revoked, this could go on forever, unattended.
+
+Parameters | Parameter Set | Description
+---------: | :-----------: | :-----------
+ApplicationId | All parameter sets | The app's ApplicationId (a.k.a. ClientId)
+TenantId | All parameter sets | The directory/tenant ID (Guid)
+Certificate<br />(Option 1) | ClientCredentials_Certificate | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
+CertificateStorePath<br/>(Option 2) | ClientCredentials_CertificateStorePath | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+JWTExpMinutes | ClientCredentials_* | In case of a poorly-synced clock, use this to adjust the expiry of the JWT that is the client assertion sent in the request.  Max. value is 10.
+Endpoint | DeviceCode_\*, RefreshToken_* | **Common**, Consumers, Organizations.  Common (default) should suffice for most scenarios.  Scopes will dictate when either of the other options must be used instead.
+Scopes | DeviceCode_\*, RefreshToken_* | One or more delegated permissions (e.g. Ews.AccessAsUser.All, mail.Send, offline_access).  Refer to MS Graph reference pages for required permissions.  Those permissions are exaclty what to specify here.
+RefreshToken | RefreshToken_* | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes ..., offline_access`.  The 'offline_access' scope is what tells Azure AD to also hand back a refresh token when issuing an access token.
 
 **Example 1**
+
+Get an app-only access token (with `-Certificate`):
 
 ```powershell
 $TokenObjectParams = @{
@@ -40,6 +43,8 @@ $TokenObject = New-MSGraphAccessToken @TokenObjectParams
 ```
 **Example 2**
 
+Get an app-only access token (with `-CertificateStorePath`):
+
 ```powershell
 $TokenObjectParams = @{
 
@@ -48,6 +53,31 @@ $TokenObjectParams = @{
     CertificateStorePath = 'Cert:\CurrentUser\My\F046351F8B17FA1755F4A567C175BEA1FC86A1EC'
 }
 $TokenObject = New-MSGraphAccessToken @TokenObjectParams
+```
+
+**Example 3**
+
+(New) Get an access token using the Device Code flow:
+
+```powershell
+$TokenObject = Get-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -Scopes mail.send, offline_access
+
+# Follow the instructions, which will look similar to this:
+Authorization started (expires at 2020-12-19 03:01:44 PM)
+To sign in, use a web browser to open the page https://microsoft.com/devicelogin and enter the code FB228GRH7 to authenticate.
+[D] Done  [?] Help (default is "D"):
+```
+
+**Example 4**
+
+(New) Refresh an access token (which was obtained using `New-MSGraphAccessToken` and including 'offline_access' in the `-Scopes` parameter):
+
+```powershell
+# The original access token request needs to include the 'offline_access' scope to be given a refresh token along with the access token:
+$TokenObject = New-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -Scopes mail.readwrite, mail.send, offline_access
+
+# To refresh the above access token:
+$NewTokenObject = New-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -RefreshToken $TokenObject
 ```
 
 ### New-MSGraphRequest
