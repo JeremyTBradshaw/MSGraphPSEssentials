@@ -1,13 +1,15 @@
 #Requires -Version 5.1
 using namespace System
 using namespace System.Management.Automation.Host
+using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.1.1 - (unpublished as of 2020-12-19):
+    v0.1.1 - (unpublished as of 2020-12-31):
 
     - Fixed missing ')' in the Device Code choice prompt caption.
+    - Added function: New-TokenCredential
 #>
 
 function New-MSGraphAccessToken {
@@ -816,4 +818,34 @@ function ConvertFrom-JWTAccessToken {
             )
         )
     }
+}
+
+function ConvertFrom-SecureStringToPlainText ([SecureString]$SecureString) {
+
+    [Marshal]::PtrToStringAuto(
+        [Marshal]::SecureStringToBSTR($SecureString)
+    )
+}
+# New-Alias -Name s2p -Value ConvertFrom-SecureStringToPlainText
+
+function New-TokenCredential {
+    [CmdletBinding()]
+    param (
+        [Guid]$ApplicationId,
+
+        [ValidateScript(
+            {
+                if ($_.token_type -eq 'Bearer' -and $_.refresh_token) { $true } else {
+
+                    throw 'Invalid token object.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken -Scopes offline_access...'
+                }
+            }
+        )]
+        [Object]$TokenObject
+    )
+
+    [PSCredential]::new(
+        $ApplicationId,
+        (ConvertTo-Json $TokenObject | ConvertTo-SecureString -AsPlainText -Force)
+    )
 }
