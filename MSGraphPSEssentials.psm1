@@ -6,7 +6,7 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.2.0 (unpublished as of 2021-01-02):
+    v0.2.0 (2021-01-03):
 
     - Fixed missing ')' in the Device Code choice prompt caption.
     - Added function: New-RefreshTokenCredential
@@ -30,6 +30,8 @@ function New-MSGraphAccessToken {
         [Parameter(Mandatory, ParameterSetName = 'RefreshTokenCredential_TenantId')]
         [string]$TenantId, # Guid / FQDN
 
+        [Parameter(Mandatory, ParameterSetName = 'ClientCredentials_Certificate')]
+        [Parameter(Mandatory, ParameterSetName = 'ClientCredentials_CertificateStorePath')]
         [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
         [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint')]
         [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
