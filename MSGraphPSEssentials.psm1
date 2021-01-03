@@ -6,10 +6,16 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.1.1 - (unpublished as of 2020-12-31):
+    v0.2.0 (unpublished as of 2021-01-02):
 
     - Fixed missing ')' in the Device Code choice prompt caption.
-    - Added function: New-TokenCredential
+    - Added function: New-RefreshTokenCredential
+    - Added -RefreshTokenCredential parameter to New-MSGraphAccessToken
+    - No longer exporting utility functions:
+        - Test-SigningCertificate
+        - ConvertFrom-Base64Url
+        - ConvertTo-Base64Url
+        - (New) ConvertFrom-SecureStringToPlainText
 #>
 
 function New-MSGraphAccessToken {
@@ -21,9 +27,13 @@ function New-MSGraphAccessToken {
         [Parameter(Mandatory, ParameterSetName = 'ClientCredentials_CertificateStorePath')]
         [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
         [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshTokenCredential_TenantId')]
         [string]$TenantId, # Guid / FQDN
 
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshToken_Endpoint')]
         [Guid]$ApplicationId,
 
         [Parameter(
@@ -55,6 +65,7 @@ function New-MSGraphAccessToken {
 
         [Parameter(ParameterSetName = 'DeviceCode_Endpoint')]
         [Parameter(ParameterSetName = 'RefreshToken_Endpoint')]
+        [Parameter(ParameterSetName = 'RefreshTokenCredential_Endpoint')]
         [ValidateSet('Common', 'Consumers', 'Organizations')]
         [string]$Endpoint = 'Common',
 
@@ -62,6 +73,8 @@ function New-MSGraphAccessToken {
         [Parameter(Mandatory, ParameterSetName = 'DeviceCode_Endpoint', HelpMessage = 'E.g. Mail.Send, Ews.AccessAsUser.All')]
         [Parameter(ParameterSetName = 'RefreshToken_TenantId')]
         [Parameter(ParameterSetName = 'RefreshToken_Endpoint')]
+        [Parameter(ParameterSetName = 'RefreshTokenCredential_TenantId')]
+        [Parameter(ParameterSetName = 'RefreshTokenCredential_Endpoint')]
         [string[]]$Scopes,
 
         [Parameter(Mandatory, ParameterSetName = 'RefreshToken_TenantId')]
@@ -74,7 +87,11 @@ function New-MSGraphAccessToken {
                 }
             }
         )]
-        [Object]$RefreshToken
+        [Object]$RefreshToken,
+
+        [Parameter(Mandatory, ParameterSetName = 'RefreshTokenCredential_TenantId')]
+        [Parameter(Mandatory, ParameterSetName = 'RefreshTokenCredential_Endpoint')]
+        [PSCredential]$RefreshTokenCredential
     )
 
     #region Initialization
@@ -100,6 +117,25 @@ function New-MSGraphAccessToken {
     }
 
     if ($PSCmdlet.ParameterSetName -like '*_TenantId') { $Script:Endpoint = $TenantId } else { $Script:Endpoint = $Endpoint }
+
+    if ($PSCmdlet.ParameterSetName -like 'RefreshTokenCredential_*') {
+
+        try {
+            $Script:ApplicationId = [Guid]$RefreshTokenCredential.UserName
+            $Script:RefreshToken = ConvertFrom-Json (ConvertFrom-SecureStringToPlainText $RefreshTokenCredential.Password)
+        }
+        catch {
+            'Failed to validate refresh token credential object. ' +
+            'Supply $RefreshTokenObject where $RefreshTokenObject = New-RefreshTokenObject ...' |
+            Write-Warning
+            throw $_
+        }
+    }
+    elseif ($PSCmdlet.ParameterSetName -like 'RefreshToken_*') {
+
+        $Script:ApplicationId = $ApplicationId
+        $Script:RefreshToken = $RefreshToken
+    }
     #endregion Initialization
 
     #region Functions
@@ -324,22 +360,34 @@ function New-MSGraphAccessToken {
     #endregion Functions
 
     #region Main
-    switch -Wildcard ($PSCmdlet.ParameterSetName) {
+    try {
+        switch -Wildcard ($PSCmdlet.ParameterSetName) {
 
-        'ClientCredentials_*' {
+            'ClientCredentials_*' {
 
-            New-AppOnlyAccessToken $TenantId $ApplicationId $Script:Certificate $JWTExpMinutes
+                New-AppOnlyAccessToken $TenantId $ApplicationId $Script:Certificate $JWTExpMinutes
+            }
+
+            'DeviceCode_*' {
+
+                New-DeviceCodeAccessToken $Script:Endpoint $ApplicationId $Scopes
+            }
+
+            'RefreshToken*' {
+
+                Get-RefreshedAcessToken $Script:Endpoint $Script:ApplicationId $Script:RefreshToken $Scopes
+            }
         }
+    }
+    catch {
+        if ($_.errorDetails.message -match '(AADSTS50194)') {
 
-        'DeviceCode_*' {
-
-            New-DeviceCodeAccessToken $Script:Endpoint $ApplicationId $Scopes
+            "Application $($ApplicationId) appears to be a single-tenant application.  " +
+            'Please supply either -Endpoint:Organizations or -TenantId:<Tenant Id/Guid>' |
+            Write-Warning
+            throw "$((ConvertFrom-Json $_.errorDetails.message).error_description)"
         }
-
-        'RefreshToken_*' {
-
-            Get-RefreshedAcessToken $Script:Endpoint $ApplicationId $RefreshToken $Scopes
-        }
+        else { throw $_ }
     }
     #endregion Main
 }
@@ -826,13 +874,14 @@ function ConvertFrom-SecureStringToPlainText ([SecureString]$SecureString) {
         [Marshal]::SecureStringToBSTR($SecureString)
     )
 }
-# New-Alias -Name s2p -Value ConvertFrom-SecureStringToPlainText
 
-function New-TokenCredential {
+function New-RefreshTokenCredential {
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory)]
         [Guid]$ApplicationId,
 
+        [Parameter(Mandatory)]
         [ValidateScript(
             {
                 if ($_.token_type -eq 'Bearer' -and $_.refresh_token) { $true } else {
