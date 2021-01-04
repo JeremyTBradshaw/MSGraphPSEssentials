@@ -3,11 +3,11 @@ A collection of functions enabling easier consumption of Microsoft Graph using j
 
 [Available on PowerShell Gallery](https://www.powershellgallery.com/packages/MSGraphPSEssentials)
 
-This module is the successor to [MSGraphAppOnlyEssentials](https://github.com/JeremyTBradshaw/MSGraphAppOnlyEssentials), which was geared specifically towards App-Only use cases.  With this module, I've broadened the scope to support additional authentication flows which use delegated permissions rather than application permissions.  This allows me to accommodate scripters who plan to write scripts/modules which can do things for users in organizational tenants (i.e. Work/School accounts) as well as personal Microsoft accounts.  Aside from the broader target audience, delegated permissions can be requested on the fly, and they're commonly limited in scope to the user who is delegating the access, making this approach a lot more accessible in terms of effort with the pre-setup of the App Registration, and palatability from a security standpoint.
+This module provides some essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only (i.e. 100% unattended) fashion using certificate credentials, or in Delegated (i.e. interactive / partially unattended) fashion, using Device Code flow (and/or Refresh Tokens).  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD (and upload the initial certificate for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with `New-MSGraphRequest`.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
 
-The module provides six essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only fashion using certificate credentials, _**or**_ in Delegated fashion, using Device Code flow (and/or Refresh Tokens).  There are a few other short and sweet utility functions included as well.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD and upload the initial certificate (for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with `New-MSGraphRequest`.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
+For Delegated scenarios, if you'd rather forego the hassles of creating an App Registration in Azure AD, feel free to use my MSGraphPSEssentials app from my Azure AD tenant.  It is setup as a multi-tenant app with support for organizational (i.e. Work/School) accounts and persona Microsoft accounts (MSA's) alike.  Just supply `-ApplicationId 0c26a905-7c94-4296-aeb4-b8925cb7e036` when using `New-MSGraphAccessToken`.
 
-💡 **[Samples are now live in the wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki)**
+💡 **In addition to to the documentation below, a growing list of samples can be found in the [wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki).**
 
 ---
 
@@ -29,6 +29,7 @@ JWTExpMinutes | ClientCredentials_* | In case of a poorly-synced clock, use this
 Endpoint | DeviceCode_\*, RefreshToken_* | **Common**, Consumers, Organizations.  Common (default) should suffice for most scenarios.  Scopes will dictate when either of the other options must be used instead.
 Scopes | DeviceCode_\*, RefreshToken_* | One or more delegated permissions (e.g. Ews.AccessAsUser.All, mail.Send, offline_access).  Refer to MS Graph reference pages for required permissions.  Those permissions are exaclty what to specify here.
 RefreshToken | RefreshToken_* | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes ..., offline_access`.  The 'offline_access' scope is what tells Azure AD to also hand back a refresh token when issuing an access token.
+**_(New in v0.2.0)_**<br />RefreshTokenCredential | RefreshTokenCredential_* | Supply a PSCredential object that was created by the new (in v0.2.0) function `New-RefreshTokenCredential`.  Refer to the example from `New-RefreshTokenCredential`'s section (further down in this readme) to see how to do this.
 
 **Example 1**
 
@@ -319,55 +320,7 @@ $removeKeyParams = @{
 Remove-MSGraphApplicationKeyCredential @removeKeyParams
 ```
 
-## Utility Functions
-
-### Test-SigningCertificate
-
-This is a simple utilty function used by some of the essential functions to verify the certificate is using the 'Microsoft Enhanced RSA and AES Cryptographic Provider' and SHA-256 hashing algorigthm.  These two things ensure everything will work as planned with the certificate and these functions.
-
-Parameters | Description
----------: | :-----------
-Certificate | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
-
-**Example 1**
-
-```powershell
-$Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
-Test-SigningCertificate $Certificate
-# Output will be True or False
-```
-
-### ConvertTo-Base64Url
-
-This utility function is used every in this module that deals with JWT's.  Many things inside a JWT (for these purposes anyway) need to be encoded as Base64.  Since Base64 contains some characters that aren't web-friendly, Base64Url to the rescue.
-
-Parameters | Description
----------: | :-----------
-String | One or more Base64 encoded strings.
-
-**Example 1**
-
-```powershell
-$Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
-ConvertTo-Base64Url -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
-# Output will be a Base64Url representation of the certificate's hash.
-```
-
-### ConvertFrom-Base64Url
-
-Much like ConvertTo-Base64Url, just in the opposite direction.
-
-Parameters | Description
----------: | :-----------
-String | One or more Base64Url encoded strings.
-
-**Example 1**
-
-```powershell
-$Headers, $Payload = ($TokenObject.access_token -split '\.')[0,1] |
-Foreach-Object { ConvertFrom-Base64Url -String $_ }
-# Output will be two Base64 strings, which are the first 2 of 3 parts of the JWT that is the access token.
-```
+## Additional Functions
 
 ### ConvertFrom-JWTAccessToken
 
@@ -392,16 +345,34 @@ ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -Expan
 ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -ExpandProperty Payload
 ```
 
+### New-RefreshTokenCredential
+
+**_(New in v0.2.0)_** This function makes it easy to store a token object from `New-MSGraphAccessToken` (and ApplicationId Guid) as a PSCredential object which can be exported securely with Export-Clixml for easy reuse later on.  `New-MSGraphAccessToken` also has a new parameter in v0.2.0, `-RefreshTokenCredential`, which takes a PSCredential object that has been prepared by this function.
+
+Parameters | Description
+---------: | :-----------
+ApplicationId | The app's ApplicationId (a.k.a. ClientId)
+TokenObject | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes offline_access, ...` (must have the refresh_token (hence `-Scopes offline_access`)).
+
+**Example 1**
+
+```powershell
+$TokenObject = Get-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -Scopes mail.send, offline_access
+
+$RTCredential = New-RefreshTokenCredential -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e03' -TokenObject $TokenObject
+$RTCredential | Export-Clixml .\RefreshToken.xml
+
+# ...then later on :
+
+$RTCredential = Import-Clixml .\RefreshToken.xml
+$NewTokenObject = New-MSGraphAccessToken -RefreshTokenCredential $RTCredential
+```
+
 ## Next Steps
 
-ℹ**Up next:** Now that the initial version of this module is published to the PowerShell Gallery, I will be focusing more on producing scripts that actually make use of this stuff, to drive some visibility into how/when/why to use this module.  Samples will be included in this repo as well as documented in the wiki.  Example ideas are:
+The next major addition to this module I would like to get done is a function to help with [batching bulk requests to the $batch MS Graph endpoint](https://docs.microsoft.com/en-us/graph/json-batching).  I'm still deciding if this task would be better-suited to a script rather than a function in the module.  Either way, I will be getting it done, have done so already in my own scripts, so it's just a matter of time before it's ready to be shared in its final form.  At the very least, it may simply end up as a sample in the wiki.
 
-- (Done already) [Get-MailboxLargeItems.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/Get-MailboxLargeItems.ps1) / [New-LargeItemsSearchFolder.ps1](https://github.com/JeremyTBradshaw/PowerShell/blob/main/New-LargeItemsSearchFolder.ps1)
-- Script to reorganize large mailboxes into folders by year.  This could be used by Outlook.com users and Exchange Online users alike, and for the latter, either admins for bulk-usage, or individual users.
-- Similar scripts, but for OneDrive / OneDrive for Business.
-- ...and more, along these lines.
-
-The next planned addition to the module itself will be a function to help with [batching bulk requests to the $batch MS Graph endpoint](https://docs.microsoft.com/en-us/graph/json-batching).  I'm still deciding if this task would be better-suited to a script rather than a function in the module.  Either way, I will be getting it done, have done so already in my own scripts, so it's just a matter of time before it's ready to be shared in its final form.
+Apart from this, I will be continuing to improve and refine the module and will be adding content to the wiki to demonstrate how to use the functions.  As time goes by, I'll also be making use of this module in my scripts which can be found in my [PowerShell repository](https://github.com/JeremyTBradshaw/PowerShell).
 
 ## References
 
