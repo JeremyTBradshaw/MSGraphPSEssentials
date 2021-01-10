@@ -17,7 +17,7 @@ For Delegated scenarios, if you'd rather forego the hassles of creating an App R
 
 This function is used to get an access token.  Access tokens last for 1 hour, so keep this in mind in long-running scripts.
 
-ℹ **Note:** For a less-powerful (security-wise) alternative to app-only access tokens, you may find that you can accomplish enough unattended'ness by interatively requesting the initial access token using Device Code flow, and then programmatically refreshing the access token before the refresh token expires.  As long as the refresh token is never revoked, this could go on forever, unattended.
+ℹ **Note:** For a less-powerful (security-wise) alternative to app-only access tokens, you may find that you can accomplish enough unattended'ness by interactively requesting the initial access token using Device Code flow, and then programmatically refreshing the access token before the refresh token expires.  As long as the refresh token is never revoked, this could go on forever, unattended.
 
 Parameters | Parameter Set | Description
 ---------: | :-----------: | :-----------
