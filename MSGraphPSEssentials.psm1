@@ -328,8 +328,7 @@ function New-MSGraphAccessToken {
             if ($_.errorDetails.message -match '(AADSTS50059)') {
 
                 "Device code request failed due to 'invalid_request' (AADSTS50059). " +
-                'Ensure the Application is enabled for public client flows in Azure AD. ' +
-                'Alternatively, try a different endpoint (with -Endpoint, or supply -TenantId).' |
+                'This appears to be a single-tenant app. Retry the command, supplying -TenantId <tenant Domain|Guid>.' |
                 Write-Warning
                 throw $_
             }
