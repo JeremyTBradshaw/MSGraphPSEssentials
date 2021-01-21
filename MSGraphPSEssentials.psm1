@@ -6,16 +6,12 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.2.0 (2021-01-03):
+    v0.3.0 (2021-01-21 (unpublished)):
 
-    - Fixed missing ')' in the Device Code choice prompt caption.
-    - Added function: New-RefreshTokenCredential
-    - Added -RefreshTokenCredential parameter to New-MSGraphAccessToken
-    - No longer exporting utility functions:
-        - Test-SigningCertificate
-        - ConvertFrom-Base64Url
-        - ConvertTo-Base64Url
-        - (New) ConvertFrom-SecureStringToPlainText
+    - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
+    - Updated error handling for device code request/authorization failures.
+    - Now specifying -UserAgent 'MSGraphPSEssentials/0.3.0' with all instances of Invoke-RestMethod.
+        - Will update this with each new release going forward.
 #>
 
 function New-MSGraphAccessToken {
@@ -204,6 +200,7 @@ function New-MSGraphAccessToken {
                 Body        = $trBody
                 Headers     = @{ Authorization = "Bearer $($JWT)" }
                 ContentType = 'application/x-www-form-urlencoded'
+                UserAgent   = 'MSGraphPSEssentials/0.3.0'
                 ErrorAction = 'Stop'
             }
 
@@ -228,6 +225,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/devicecode"
                 Body        = $dcrBody
                 ContentType = 'application/x-www-form-urlencoded'
+                UserAgent   = 'MSGraphPSEssentials/0.3.0'
                 ErrorAction = 'Stop'
             }
             $dcrResponse = Invoke-RestMethod @dcrParams
@@ -271,6 +269,7 @@ function New-MSGraphAccessToken {
                                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                                 Body        = $trBody
                                 ContentType = 'application/x-www-form-urlencoded'
+                                UserAgent   = 'MSGraphPSEssentials/0.3.0'
                                 ErrorAction = 'Stop'
                             }
                             $trResponse = Invoke-RestMethod @trParams
@@ -297,8 +296,11 @@ function New-MSGraphAccessToken {
                                 }
                                 elseif ($_.errorDetails.message -match '(AADSTS7000218)') {
 
-                                    throw "Authorization failed due to 'invalid_client' (AADSTS7000218). " +
-                                    'Ensure the Application is enabled for public client flows in Azure AD.'
+                                    "Authorization failed due to 'invalid_client' (AADSTS7000218). " +
+                                    'Ensure the Application is enabled for public client flows in Azure AD. ' +
+                                    'If this is app is intended for app-only/unattended use, you should instead use the -Certificate/-CertificateStorePath parameters.' |
+                                    Write-Warning
+                                    throw $_
                                 }
                                 else {
                                     Write-Warning 'Authorization failed due to an unexpected error.'
@@ -325,9 +327,18 @@ function New-MSGraphAccessToken {
         catch {
             if ($_.errorDetails.message -match '(AADSTS50059)') {
 
-                throw "Authorization failed due to 'invalid_request' (AADSTS50059). " +
+                "Device code request failed due to 'invalid_request' (AADSTS50059). " +
                 'Ensure the Application is enabled for public client flows in Azure AD. ' +
-                'Alternatively, try a different endpoint (with -Endpoint, or supply -TenantId).'
+                'Alternatively, try a different endpoint (with -Endpoint, or supply -TenantId).' |
+                Write-Warning
+                throw $_
+            }
+            elseif ($_.errorDetails.message -match '(AADSTS70011)') {
+
+                "Device code request failed due to 'invalid_scope' (AADSTS70011), which typically means the requested scope(s) do not work with the specified endpoint ('Common' by default). " +
+                'Retry the command with either -Endpoint Organizations or -TenantId <tenant Domain|Guid>.' |
+                Write-Warning
+                throw $_
             }
             else { throw $_ }
         }
@@ -350,6 +361,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                 Body        = $trBody
                 ContentType = 'application/x-www-form-urlencoded'
+                UserAgent   = 'MSGraphPSEssentials/0.3.0'
                 ErrorAction = 'Stop'
             }
             $trResponse = Invoke-RestMethod @trParams
@@ -431,6 +443,7 @@ function New-MSGraphRequest {
             Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
             Method      = $Method
             ContentType = 'application/json'
+            UserAgent   = 'MSGraphPSEssentials/0.3.0'
             ErrorAction = 'Stop'
         }
 
