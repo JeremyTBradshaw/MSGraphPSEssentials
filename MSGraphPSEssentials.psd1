@@ -36,8 +36,7 @@ v0.3.0 (2021-01-25 (unpublished)):
 
 - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
 - Updated error handling for device code request/authorization failures.
-- Now specifying -UserAgent 'MSGraphPSEssentials/0.3.0' with all instances of Invoke-RestMethod.
-    - Will update this with each new release going forward.
+- Now specifying -UserAgent 'MSGraphPSEssentials/#.#.#' with all instances of Invoke-RestMethod.
 - Stopped unnecessarily specifying -KeyExportPolicy Exportable for New-SelfSignedCertificate (in New-SelfSignedMSGraphApplicationCertificate function).
 '@
         }

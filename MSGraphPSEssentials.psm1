@@ -10,8 +10,7 @@ using namespace System.Security.Cryptography.X509Certificates
 
     - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
     - Updated error handling for device code request/authorization failures.
-    - Now specifying -UserAgent 'MSGraphPSEssentials/0.3.0' with all instances of Invoke-RestMethod.
-        - Will update this with each new release going forward.
+    - Now specifying -UserAgent 'MSGraphPSEssentials/#.#.#' with all instances of Invoke-RestMethod.
     - Stopped unnecessarily specifying -KeyExportPolicy Exportable for New-SelfSignedCertificate (in New-SelfSignedMSGraphApplicationCertificate function).
 #>
 
@@ -201,7 +200,7 @@ function New-MSGraphAccessToken {
                 Body        = $trBody
                 Headers     = @{ Authorization = "Bearer $($JWT)" }
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = 'MSGraphPSEssentials/0.3.0'
+                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
 
@@ -226,7 +225,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/devicecode"
                 Body        = $dcrBody
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = 'MSGraphPSEssentials/0.3.0'
+                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
             $dcrResponse = Invoke-RestMethod @dcrParams
@@ -270,7 +269,7 @@ function New-MSGraphAccessToken {
                                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                                 Body        = $trBody
                                 ContentType = 'application/x-www-form-urlencoded'
-                                UserAgent   = 'MSGraphPSEssentials/0.3.0'
+                                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
                                 ErrorAction = 'Stop'
                             }
                             $trResponse = Invoke-RestMethod @trParams
@@ -361,7 +360,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                 Body        = $trBody
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = 'MSGraphPSEssentials/0.3.0'
+                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
             $trResponse = Invoke-RestMethod @trParams
@@ -443,7 +442,7 @@ function New-MSGraphRequest {
             Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
             Method      = $Method
             ContentType = 'application/json'
-            UserAgent   = 'MSGraphPSEssentials/0.3.0'
+            UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
             ErrorAction = 'Stop'
         }
 
