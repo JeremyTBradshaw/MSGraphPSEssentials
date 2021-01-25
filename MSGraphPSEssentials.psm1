@@ -6,12 +6,13 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.3.0 (2021-01-21 (unpublished)):
+    v0.3.0 (2021-01-25 (unpublished)):
 
     - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
     - Updated error handling for device code request/authorization failures.
     - Now specifying -UserAgent 'MSGraphPSEssentials/0.3.0' with all instances of Invoke-RestMethod.
         - Will update this with each new release going forward.
+    - Stopped unnecessarily specifying -KeyExportPolicy Exportable for New-SelfSignedCertificate (in New-SelfSignedMSGraphApplicationCertificate function).
 #>
 
 function New-MSGraphAccessToken {
@@ -536,7 +537,6 @@ function New-SelfSignedMSGraphApplicationCertificate {
         FriendlyName      = $FriendlyName
         CertStoreLocation = $CertStoreLocation
         NotAfter          = $NotAfter
-        KeyExportPolicy   = 'Exportable'
         KeySpec           = $KeySpec
         Provider          = 'Microsoft Enhanced RSA and AES Cryptographic Provider'
         HashAlgorithm     = 'SHA256'
