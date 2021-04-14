@@ -6,7 +6,7 @@ using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
 <#
-    v0.3.0 (2021-01-25 (unpublished)):
+    v0.3.0 (2021-04-14):
 
     - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
     - Updated error handling for device code request/authorization failures.
