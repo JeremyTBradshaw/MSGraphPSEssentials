@@ -5,13 +5,12 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<#
-    v0.3.0 (2021-04-14):
+<# Release Notes for v0.3.1 (2021-04-21):
 
-    - Added AADSTS70011 to the caught/handled errors when using New-MSGraphAccessToken.
-    - Updated error handling for device code request/authorization failures.
-    - Now specifying -UserAgent 'MSGraphPSEssentials/#.#.#' with all instances of Invoke-RestMethod.
-    - Stopped unnecessarily specifying -KeyExportPolicy Exportable for New-SelfSignedCertificate (in New-SelfSignedMSGraphApplicationCertificate function).
+    - Fixed 3 instances of same typo ('throw = ' (dropped the '=').
+    - Fixed New-SelfSignedMSGraphApplicationCertificate function:
+        Implemented crutch-fix for New-SelfSignedCertificate when using PS Core to make private key available.
+        (related to known issue: https://github.com/PowerShell/PowerShell/issues/12081)
 #>
 
 function New-MSGraphAccessToken {
@@ -108,7 +107,7 @@ function New-MSGraphAccessToken {
 
         if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            throw "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
             'and the SHA-256 hashing algorithm.  ' +
             'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
         }
@@ -508,10 +507,9 @@ function New-MSGraphRequest {
 function New-SelfSignedMSGraphApplicationCertificate {
     [CmdletBinding()]
     param (
-        [ValidatePattern('(?=^.{4,253}$)(^((?!-)[a-zA-Z0-9-]{1,63}(?<!-)\.)+[a-zA-Z]{2,63}$)')]
-        [string]$DnsName,
-
         [Parameter(Mandatory)]
+        [string]$Subject,
+
         [string]$FriendlyName,
 
         [ValidateScript(
@@ -532,7 +530,7 @@ function New-SelfSignedMSGraphApplicationCertificate {
 
     $NewCertParams = @{
 
-        DnsName           = $DnsName
+        Subject           = $Subject
         FriendlyName      = $FriendlyName
         CertStoreLocation = $CertStoreLocation
         NotAfter          = $NotAfter
@@ -542,7 +540,26 @@ function New-SelfSignedMSGraphApplicationCertificate {
         ErrorAction       = 'Stop'
     }
 
-    try { New-SelfSignedCertificate @NewCertParams }
+    try {
+        if ($PSVersionTable.PSEdition -eq 'Desktop') { New-SelfSignedCertificate @NewCertParams }
+        else {
+            # PowerShell Core's PKI module has an issue with allowing the private key to be exportable:
+            # https://github.com/PowerShell/PowerShell/issues/12081
+            try {
+                #Pre-import the PKI module to make the WinPSCompatSession available to Invoke-Command:
+                Import-Module -Name PKI -UseWindowsPowerShell -WarningAction:SilentlyContinue
+
+                $WinPSCompatSession = Get-PSSession -Name WinPSCompatSession -ErrorAction:Stop
+                if ($WinPSCompatSession) {
+
+                    Invoke-Command -Session $WinPSCompatSession -ScriptBlock {$Global:tmpCertificate = New-SelfSignedCertificate @using:NewCertParams} -ErrorAction:Stop
+                    Get-ChildItem -Path "$($CertStoreLocation)\$((Invoke-Command -Session $WinPSCompatSession -ScriptBlock {$tmpCertificate}).Thumbprint)" -ErrorAction:Stop
+                }
+                else { throw $_ }
+            }
+            catch { throw "Failed to use WinPSCompatSession to generate valid self-signed certificate. please use Windows PowerShell 5.1 instead."}
+        }
+    }
     catch { throw $_ }
 }
 New-Alias -Name 'New-SelfSignedAzureADAppRegistrationCertificate' -Value New-SelfSignedMSGraphApplicationCertificate
@@ -591,7 +608,7 @@ function New-MSGraphPoPToken {
 
         if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            throw "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
             'and the SHA-256 hashing algorithm.  ' +
             'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
         }
@@ -700,7 +717,7 @@ function Add-MSGraphApplicationKeyCredential {
 
         if (-not (Test-SigningCertificate -Certificate $Script:Certificate)) {
 
-            throw = "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
+            throw "The supplied certificate must use the provider 'Microsoft Enhanced RSA and AES Cryptographic Provider', " +
             'and the SHA-256 hashing algorithm.  ' +
             'For best luck, use a certificate generated using New-SelfSignedMSGraphApplicationCertificate.'
         }
