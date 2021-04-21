@@ -11,6 +11,10 @@ using namespace System.Security.Cryptography.X509Certificates
     - Fixed New-SelfSignedMSGraphApplicationCertificate function:
         Implemented crutch-fix for New-SelfSignedCertificate when using PS Core to make private key available.
         (related to known issue: https://github.com/PowerShell/PowerShell/issues/12081)
+    - Updated New-SelfSignedMSGraphApplicationCertificate function:
+        Re-introduced -Subject parameter in favor of DnsName because it just makes more sense.
+            (**Not doing any validation of the supplied string**)
+        The -FriendlyName parameter is now optional.
 #>
 
 function New-MSGraphAccessToken {
