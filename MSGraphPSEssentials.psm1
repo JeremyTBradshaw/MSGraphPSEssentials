@@ -5,16 +5,9 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.3.1 (2021-04-21):
+<# Release Notes for v0.4.0 (2021-04-22) (unpublished):
 
-    - Fixed 3 instances of same typo ('throw = ' (dropped the '=').
-    - Fixed New-SelfSignedMSGraphApplicationCertificate function:
-        Implemented crutch-fix for New-SelfSignedCertificate when using PS Core to make private key available.
-        (related to known issue: https://github.com/PowerShell/PowerShell/issues/12081)
-    - Updated New-SelfSignedMSGraphApplicationCertificate function:
-        Re-introduced -Subject parameter in favor of DnsName because it just makes more sense.
-            (**Not doing any validation of the supplied string**)
-        The -FriendlyName parameter is now optional.
+    - Added new function: Get-AccessTokenExpiration.
 #>
 
 function New-MSGraphAccessToken {
@@ -931,4 +924,30 @@ function New-RefreshTokenCredential {
         $ApplicationId,
         (ConvertTo-Json $TokenObject | ConvertTo-SecureString -AsPlainText -Force)
     )
+}
+
+function Get-AccessTokenExpiration {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateScript(
+            {
+                if ($_.token_type -eq 'Bearer' -and $_.access_token) { $true } else {
+
+                    throw 'Invalid token object.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken...'
+                }
+            }
+        )]
+        [Object]$TokenObject
+    )
+
+    $JWT = ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token
+
+    [PSCustomObject]@{
+
+        IssuedAt_LocalTime       = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.iat).ToLocalTime()
+        NotBefore_LocalTime      = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.nbf).ToLocalTime()
+        ExpirationTime_LocalTime = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.exp).ToLocalTime()
+        TimeUntilExpiration      = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.exp).ToLocalTime() - [datetime]::Now
+    }
 }
