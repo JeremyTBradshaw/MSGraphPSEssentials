@@ -5,7 +5,7 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.4.0 (2021-04-22) (unpublished):
+<# Release Notes for v0.4.0 (2021-04-23) (unpublished):
 
     - Added new function: Get-AccessTokenExpiration.
 #>
@@ -942,12 +942,16 @@ function Get-AccessTokenExpiration {
     )
 
     $JWT = ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token
+    $Epoch = [datetime]"1970-01-01"
+    $Now = [datetime]::Now
+    $exp = $Epoch.AddSeconds($JWT.Payload.exp).ToLocalTime()
 
     [PSCustomObject]@{
 
-        IssuedAt_LocalTime       = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.iat).ToLocalTime()
-        NotBefore_LocalTime      = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.nbf).ToLocalTime()
-        ExpirationTime_LocalTime = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.exp).ToLocalTime()
-        TimeUntilExpiration      = ([datetime]"1970-01-01").AddSeconds($JWT.Payload.exp).ToLocalTime() - [datetime]::Now
+        IssuedAt_LocalTime       = $Epoch.AddSeconds($JWT.Payload.iat).ToLocalTime()
+        NotBefore_LocalTime      = $Epoch.AddSeconds($JWT.Payload.nbf).ToLocalTime()
+        ExpirationTime_LocalTime = $exp
+        TimeUntilExpiration      = $exp - $Now
+        IsExpired                = $Now -gt $exp
     }
 }
