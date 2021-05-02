@@ -180,7 +180,7 @@ New-SelfSignedMSGraphApplicationCertificate @newCertParams
 
 ### New-MSGraphPoPToken
 
-This function generates a Proof of Possession JWT (JSON Web Token) for use with the addKey/removeKey MS Graph application resource type methods (in this case the `Add-MSGraphApplicationKeyCredential` and `Remove-MSGraphApplicationKeyCredential` functions).
+This function generates a Proof of Possession JWT (JSON Web Token) for use with the addKey/removeKey MS Graph application resource type methods (in this case the `Add-MSGraphApplicationKeyCredential` and `Remove-MSGraphApplicationKeyCredential` functions).  When adding a new key (i.e., certificate) to itself via /addKey, the application needs to prove it has a copy of one of the existing certificates (via a PoP token).  When removing a key (i.e., certificate) from itself via /removeKey, the application needs to prove it has a copy of one of the other existing certificates (in order to not cutoff its own access accidentally).
 
 Parameters | Description
 ---------: | :-----------
