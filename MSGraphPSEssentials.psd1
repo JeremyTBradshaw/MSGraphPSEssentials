@@ -33,7 +33,7 @@
             LicenseUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/JeremyTBradshaw/MSGraphPSEssentials'
             ReleaseNotes = @'
-v0.4.0 (2021-04-23) (unpublished):
+v0.4.0 (2021-05-13):
 
 - Added new function: Get-AccessTokenExpiration.
 - Removed alias: New-SelfSignedAzureADAppRegistrationCertificate.
