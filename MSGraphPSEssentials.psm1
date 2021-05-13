@@ -5,9 +5,13 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.4.0 (2021-04-23) (unpublished):
+<# Release Notes for v0.4.0 (2021-05-13):
 
     - Added new function: Get-AccessTokenExpiration.
+    - Removed alias: New-SelfSignedAzureADAppRegistrationCertificate.
+    - Added warning for New-MSGraphRequest when throttling is encountered, including the Retry-After seconds.
+    - Minor updates:
+        -- Updated throw's (dropped unnecessary '$_')
 #>
 
 function New-MSGraphAccessToken {
@@ -93,7 +97,7 @@ function New-MSGraphAccessToken {
         try {
             $Script:Certificate = Get-ChildItem -Path $CertificateStorePath -ErrorAction Stop
         }
-        catch { throw $_ }
+        catch { throw }
     }
     elseif ($PSCmdlet.ParameterSetName -eq 'ClientCredentials_Certificate') {
 
@@ -122,7 +126,7 @@ function New-MSGraphAccessToken {
             'Failed to validate refresh token credential object. ' +
             'Supply $RefreshTokenObject where $RefreshTokenObject = New-RefreshTokenObject ...' |
             Write-Warning
-            throw $_
+            throw
         }
     }
     elseif ($PSCmdlet.ParameterSetName -like 'RefreshToken_*') {
@@ -205,7 +209,7 @@ function New-MSGraphAccessToken {
             # Output the token request response:
             $trResponse
         }
-        catch { throw $_ }
+        catch { throw }
     }
 
     function New-DeviceCodeAccessToken ($Endpoint, $ApplicationId, $Scopes) {
@@ -296,7 +300,7 @@ function New-MSGraphAccessToken {
                                     'Ensure the Application is enabled for public client flows in Azure AD. ' +
                                     'If this is app is intended for app-only/unattended use, you should instead use the -Certificate/-CertificateStorePath parameters.' |
                                     Write-Warning
-                                    throw $_
+                                    throw
                                 }
                                 else {
                                     Write-Warning 'Authorization failed due to an unexpected error.'
@@ -305,7 +309,7 @@ function New-MSGraphAccessToken {
                             }
                             else {
                                 Write-Warning 'An error was encountered with the Invoke-RestMethod command.  Authorization request did not complete.'
-                                throw $_
+                                throw
                             }
                         }
                     }
@@ -326,16 +330,16 @@ function New-MSGraphAccessToken {
                 "Device code request failed due to 'invalid_request' (AADSTS50059). " +
                 'This appears to be a single-tenant app. Retry the command, supplying -TenantId <tenant Domain|Guid>.' |
                 Write-Warning
-                throw $_
+                throw
             }
             elseif ($_.errorDetails.message -match '(AADSTS70011)') {
 
                 "Device code request failed due to 'invalid_scope' (AADSTS70011), which typically means the requested scope(s) do not work with the specified endpoint ('Common' by default). " +
                 'Retry the command with either -Endpoint Organizations or -TenantId <tenant Domain|Guid>.' |
                 Write-Warning
-                throw $_
+                throw
             }
-            else { throw $_ }
+            else { throw }
         }
     }
 
@@ -364,7 +368,7 @@ function New-MSGraphAccessToken {
             # Output the token request response:
             $trResponse
         }
-        catch { throw $_ }
+        catch { throw }
     }
     #endregion Functions
 
@@ -396,7 +400,7 @@ function New-MSGraphAccessToken {
             Write-Warning
             throw "$((ConvertFrom-Json $_.errorDetails.message).error_description)"
         }
-        else { throw $_ }
+        else { throw }
     }
     #endregion Main
 }
@@ -498,7 +502,14 @@ function New-MSGraphRequest {
             }
         }
     }
-    catch { throw $_ }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -eq 429) {
+
+            "The request was throttled by Microsoft Graph/Azure AD. " +
+            "Please wait $($_.Exception.Response.Headers['Retry-After']) seconds before retrying the request, per the Retry-After response header (see `$Error[0].Exception.Response.Headers['Retry-After'])." | Write-Warning
+        }
+        throw
+    }
 }
 
 function New-SelfSignedMSGraphApplicationCertificate {
@@ -549,17 +560,16 @@ function New-SelfSignedMSGraphApplicationCertificate {
                 $WinPSCompatSession = Get-PSSession -Name WinPSCompatSession -ErrorAction:Stop
                 if ($WinPSCompatSession) {
 
-                    Invoke-Command -Session $WinPSCompatSession -ScriptBlock {$Global:tmpCertificate = New-SelfSignedCertificate @using:NewCertParams} -ErrorAction:Stop
+                    Invoke-Command -Session $WinPSCompatSession -ScriptBlock { $Global:tmpCertificate = New-SelfSignedCertificate @using:NewCertParams } -ErrorAction:Stop
                     Get-ChildItem -Path "$($CertStoreLocation)\$((Invoke-Command -Session $WinPSCompatSession -ScriptBlock {$tmpCertificate}).Thumbprint)" -ErrorAction:Stop
                 }
-                else { throw $_ }
+                else { throw }
             }
-            catch { throw "Failed to use WinPSCompatSession to generate valid self-signed certificate. please use Windows PowerShell 5.1 instead."}
+            catch { throw "Failed to use WinPSCompatSession to generate valid self-signed certificate. please use Windows PowerShell 5.1 instead." }
         }
     }
-    catch { throw $_ }
+    catch { throw }
 }
-New-Alias -Name 'New-SelfSignedAzureADAppRegistrationCertificate' -Value New-SelfSignedMSGraphApplicationCertificate
 
 function New-MSGraphPoPToken {
     [CmdletBinding(
@@ -656,7 +666,7 @@ function New-MSGraphPoPToken {
         # Output the token:
         $JWT
     }
-    catch { throw $_ }
+    catch { throw }
 }
 
 function Add-MSGraphApplicationKeyCredential {
@@ -741,7 +751,7 @@ function Add-MSGraphApplicationKeyCredential {
 
         New-MSGraphRequest @AddKeyParams
     }
-    catch { throw $_ }
+    catch { throw }
 }
 
 function Remove-MSGraphApplicationKeyCredential {
@@ -829,7 +839,7 @@ function Remove-MSGraphApplicationKeyCredential {
 
         New-MSGraphRequest @RemoveKeyParams
     }
-    catch { throw $_ }
+    catch { throw }
 }
 
 function Test-SigningCertificate ([X509Certificate2]$Certificate) {
