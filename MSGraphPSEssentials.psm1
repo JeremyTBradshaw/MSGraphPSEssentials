@@ -5,13 +5,9 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.4.0 (2021-05-13):
+<# Release Notes for v0.4.1 (2021-05-27):
 
-    - Added new function: Get-AccessTokenExpiration.
-    - Removed alias: New-SelfSignedAzureADAppRegistrationCertificate.
-    - Added warning for New-MSGraphRequest when throttling is encountered, including the Retry-After seconds.
-    - Minor updates:
-        -- Updated throw's (dropped unnecessary '$_')
+    - Fixed UserAgent reporting (replaced $MyInvocation... with $PSCmdlet.MyInvocation...).
 #>
 
 function New-MSGraphAccessToken {
@@ -200,7 +196,7 @@ function New-MSGraphAccessToken {
                 Body        = $trBody
                 Headers     = @{ Authorization = "Bearer $($JWT)" }
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
+                UserAgent   = "MSGraphPSEssentials/$($PSCmdlet.MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
 
@@ -225,7 +221,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/devicecode"
                 Body        = $dcrBody
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
+                UserAgent   = "MSGraphPSEssentials/$($PSCmdlet.MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
             $dcrResponse = Invoke-RestMethod @dcrParams
@@ -269,7 +265,7 @@ function New-MSGraphAccessToken {
                                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                                 Body        = $trBody
                                 ContentType = 'application/x-www-form-urlencoded'
-                                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
+                                UserAgent   = "MSGraphPSEssentials/$($PSCmdlet.MyInvocation.MyCommand.Module.Version)"
                                 ErrorAction = 'Stop'
                             }
                             $trResponse = Invoke-RestMethod @trParams
@@ -360,7 +356,7 @@ function New-MSGraphAccessToken {
                 Uri         = "https://login.microsoftonline.com/$($Endpoint)/oauth2/v2.0/token"
                 Body        = $trBody
                 ContentType = 'application/x-www-form-urlencoded'
-                UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
+                UserAgent   = "MSGraphPSEssentials/$($PSCmdlet.MyInvocation.MyCommand.Module.Version)"
                 ErrorAction = 'Stop'
             }
             $trResponse = Invoke-RestMethod @trParams
@@ -442,7 +438,7 @@ function New-MSGraphRequest {
             Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
             Method      = $Method
             ContentType = 'application/json'
-            UserAgent   = "MSGraphPSEssentials/$($MyInvocation.MyCommand.Module.Version)"
+            UserAgent   = "MSGraphPSEssentials/$($PSCmdlet.MyInvocation.MyCommand.Module.Version)"
             ErrorAction = 'Stop'
         }
 
