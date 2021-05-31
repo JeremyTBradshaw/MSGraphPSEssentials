@@ -46,16 +46,16 @@
                Get-AccessTokenExpiration uses the *ConvertFrom-JWTAccessToken* to determine the expiration time.
 
         - Uses *Add-MSGraphApplicationKeyCredential* and *Remove-MSGraphApplicationKeyCredential* to "roll the keys"
-          (i.e., replace the current certificate) according to the supplied KeyRolloverDays value.  This is handled via
-          the script's rollAppKey function.  The rollAppKey function also makes use of both *New-MSGraphPoPToken* and
-          *New-MSGraphRequest* (via newMGRequest) in its process.
+          (i.e., replace the current certificate) according to the supplied appKeyRolloverDays value.  This is handled
+          via the script's rollAppKey function.  The rollAppKey function also makes use of both *New-MSGraphPoPToken*
+          and *New-MSGraphRequest* (via newMGRequest) in its process.
 
         - Avoids throttling proactively, and handles being throttled gracefully if/when it does occur.  This is
           orchestrated in the script's newMGRequest function which makes use of *New-MSGraphRequest*, and the supplied
           value for ThrottlingMaxRetries.  newMGRequest ensures a minimum of 200ms delay between requests which should
           be adequate to avoid throttling based on the published service limits.  Note however, hrottling is dynamic and
-          Microsoft may choose to throttle as much as they need, whenever necessary to protect they service during heavy
-          usage from sources across the entire service, not just this app or tenant.
+          Microsoft may choose to throttle as much as they need, whenever necessary to protect their service during
+          heavy usage from sources across the entire service, not just this app or tenant.
 
     Additional sample scripts will be added to the MSGraphPSEssentials repository, which use this script as the
     starting template and then demonstrate example use cases for the script (e.g. automations which interact with MS
