@@ -5,9 +5,12 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.4.1 (2021-05-27):
+<# Release Notes for v0.5.0 (unpublished) (2021-05-31):
 
-    - Fixed UserAgent reporting (replaced $MyInvocation... with $PSCmdlet.MyInvocation...).
+    - Added 'Ignore' option for New-MSGraphRequest's -nextLinkAction parameter.
+        --  Still deciding whether to commit this change.
+        --  Main reason for this addition is that suppressing the warning can be nearly impossible when
+            New-MSGraphRequest is being called from another function (from outside of this module).
 #>
 
 function New-MSGraphAccessToken {
@@ -427,7 +430,7 @@ function New-MSGraphRequest {
 
         [string]$Body,
 
-        [ValidateSet('Warn', 'Inquire', 'Continue', 'SilentlyContinue')]
+        [ValidateSet('Ignore', 'Warn', 'Inquire', 'Continue', 'SilentlyContinue')]
         [string]$nextLinkAction = 'Warn'
     )
 
@@ -458,6 +461,8 @@ function New-MSGraphRequest {
             $Script:Continue = $true
 
             switch ($nextLinkAction) {
+
+                Ignore { $Script:Continue = $false }
 
                 Warn {
                     Write-Warning -Message "There are more results available. Next page: $($requestResponse.'@odata.nextLink')"
