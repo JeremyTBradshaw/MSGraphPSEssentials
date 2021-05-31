@@ -88,7 +88,7 @@
             appObjectId = '7767b2dd-a567-4869-a4bb-4686a65a2001' #<--: Needed for /addKey & /removeKey
         }
     -----------------------------------------------------------------------------------
-    ** See Demo-MSGraphParams.psd1 for a more detailed example, with comments included.
+    ** See Demo-mSGraphPSEssentials.MSGraphParams.psd1 for a more detailed example, with comments included.
 
     .Parameter DisableLogging
     By default, this script will create a folder in the same folder as the script itself, named after the script, but
