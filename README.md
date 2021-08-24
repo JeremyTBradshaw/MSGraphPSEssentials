@@ -94,7 +94,7 @@ Method | **GET**, POST, PATCH, PUT, DELETE.  Follow the reference articles' inst
 AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`
 Request | Use the **HTTP request** shown in MS Graph reference articles.  Include the query parameters, E.g. ``"auditLogs/signIns?&`$filter=userId eq '86d691b0-8c2b-4adf-bdcd-d9f0ab7b6183' and status/errorCode eq 0"``.  The leading forward slash (e.g. "<b>/</b>users") can be include or omitted.
 Body<br/>(Optional) | Use the **request body** as shown in MS Graph reference articles, supplied as a hashtable (the function converts it to JSON automatically).
-nextLinkAction | **Warn**, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
+nextLinkAction | Ignore, **Warn**, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
 
 **Example 1**
 
