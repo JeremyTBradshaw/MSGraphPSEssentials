@@ -5,10 +5,9 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.5.0 (unpublished) (2021-05-31):
+<# Release Notes for v0.5.0 (2021-08-24):
 
     - Added 'Ignore' option for New-MSGraphRequest's -nextLinkAction parameter.
-        --  Still deciding whether to commit this change.
         --  Main reason for this addition is that suppressing the warning can be nearly impossible when
             New-MSGraphRequest is being called from another function (from outside of this module).
 #>
@@ -492,6 +491,7 @@ function New-MSGraphRequest {
             if ($Script:Continue) {
 
                 $nextLinkRequestParams = @{
+
                     AccessToken    = $AccessToken
                     ApiVersion     = $ApiVersion
                     Request        = "$($requestResponse.'@odata.nextLink' -replace 'https://graph.microsoft.com/(v1\.0|beta)/')"
