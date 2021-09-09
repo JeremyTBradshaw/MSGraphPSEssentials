@@ -5,11 +5,14 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.5.0 (2021-08-24):
+<# Release Notes for v0.5.5 (2021-09-08):
 
-    - Added 'Ignore' option for New-MSGraphRequest's -nextLinkAction parameter.
-        --  Main reason for this addition is that suppressing the warning can be nearly impossible when
-            New-MSGraphRequest is being called from another function (from outside of this module).
+    - Added [-ExoEwsAppOnlyScope] switch parameter for New-MSGraphAccessToken's ClientCredentials parameter sets.
+        --  This will change the scope to https://outlook.office365.com/.default instead of the typical
+        https://graph.microsoft.com/.default, to enable OAuth app-only authentication with Exchange Online for EWS
+        applications.
+        -- Delegated permissions / user-present auth. flows for EWS are already covered in the DeviceCode and
+        RefreshToken parameter sets (i.e., supply -Scopes Ews.AccessUser.All).
 #>
 
 function New-MSGraphAccessToken {
@@ -53,6 +56,10 @@ function New-MSGraphAccessToken {
             }
         )]
         [string]$CertificateStorePath,
+
+        [Parameter(ParameterSetName = 'ClientCredentials_Certificate')]
+        [Parameter(ParameterSetName = 'ClientCredentials_CertificateStorePath')]
+        [switch]$ExoEwsAppOnlyScope,
 
         [Parameter(ParameterSetName = 'ClientCredentials_Certificate')]
         [Parameter(ParameterSetName = 'ClientCredentials_CertificateStorePath')]
@@ -187,7 +194,7 @@ function New-MSGraphAccessToken {
                 client_id             = $ApplicationId
                 client_assertion      = $JWT
                 client_assertion_type = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
-                scope                 = 'https://graph.microsoft.com/.default'
+                scope                 = "$(if ($ExoEwsAppOnlyScope) {'https://outlook.office365.com' } else { 'https://graph.microsoft.com' })/.default"
                 grant_type            = "client_credentials"
             }
 
