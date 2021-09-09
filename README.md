@@ -7,6 +7,8 @@ This module provides some essential functions for working with Microsoft Graph u
 
 For Delegated scenarios, if you'd rather forego the hassles of creating an App Registration in Azure AD, feel free to use my MSGraphPSEssentials app from my Azure AD tenant.  It is setup as a multi-tenant app with support for organizational (i.e. Work/School) accounts and personal Microsoft accounts (MSA's) alike.  Just supply `-ApplicationId 0c26a905-7c94-4296-aeb4-b8925cb7e036` when using `New-MSGraphAccessToken`.
 
+📰**Newsflash! (2021-09-08)** [MSGraphPSEssentials 0.5.5](https://www.powershellgallery.com/packages/MSGraphPSEssentials/0.5.5) has been updated with a new parameter - `-ExoEwsAppOnlyScope` - which brings support for EWS app-only OAuth to this module.  Along with that comes the deprecation of the **EwsOAuthAppOnlyEssentials** module.
+
 💡 **In addition to to the documentation below, a growing list of samples can be found in the [wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki).**
 
 ---
@@ -25,11 +27,12 @@ ApplicationId | All parameter sets | The app's ApplicationId (a.k.a. ClientId)
 TenantId | All parameter sets | The directory/tenant ID (Guid)
 Certificate<br />(Option 1) | ClientCredentials_Certificate | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
 CertificateStorePath<br/>(Option 2) | ClientCredentials_CertificateStorePath | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+**_(New in v0.5.5)_**<br />ExoEwsAppOnlyScope | ClientCredentials_* | Uses the Exchange Online scope (https://outlook.office365.com/.default), for use with EWS OAuth app-only authentication.
 JWTExpMinutes | ClientCredentials_* | In case of a poorly-synced clock, use this to adjust the expiry of the JWT that is the client assertion sent in the request.  Max. value is 10.
 Endpoint | DeviceCode_\*, RefreshToken_* | **Common**, Consumers, Organizations.  Common (default) should suffice for most scenarios.  Scopes will dictate when either of the other options must be used instead.
 Scopes | DeviceCode_\*, RefreshToken_* | One or more delegated permissions (e.g. Ews.AccessAsUser.All, mail.Send, offline_access).  Refer to MS Graph reference pages for required permissions.  Those permissions are exaclty what to specify here.
 RefreshToken | RefreshToken_* | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes ..., offline_access`.  The 'offline_access' scope is what tells Azure AD to also hand back a refresh token when issuing an access token.
-**_(New in v0.2.0)_**<br />RefreshTokenCredential | RefreshTokenCredential_* | Supply a PSCredential object that was created by the new (in v0.2.0) function `New-RefreshTokenCredential`.  Refer to the example from `New-RefreshTokenCredential`'s section (further down in this readme) to see how to do this.
+RefreshTokenCredential | RefreshTokenCredential_* | Supply a PSCredential object that was created by the new (in v0.2.0) function `New-RefreshTokenCredential`.  Refer to the example from `New-RefreshTokenCredential`'s section (further down in this readme) to see how to do this.
 
 **Example 1**
 
@@ -368,11 +371,9 @@ $RTCredential = Import-Clixml .\RefreshToken.xml
 $NewTokenObject = New-MSGraphAccessToken -RefreshTokenCredential $RTCredential
 ```
 
-## Next Steps
+## Samples
 
-The next major addition to this module I would like to get done is a function to help with [batching bulk requests to the $batch MS Graph endpoint](https://docs.microsoft.com/en-us/graph/json-batching).  I'm still deciding if this task would be better-suited to a script rather than a function in the module.  Either way, I will be getting it done, have done so already in my own scripts, so it's just a matter of time before it's ready to be shared in its final form.  At the very least, it may simply end up as a sample in the wiki.
-
-Apart from this, I will be continuing to improve and refine the module and will be adding content to the wiki to demonstrate how to use the functions.  As time goes by, I'll also be making use of this module in my scripts which can be found in my [PowerShell repository](https://github.com/JeremyTBradshaw/PowerShell).
+Check out the [sample script](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/tree/main/Samples) I added a few months back.  It demonstrates a few concepts for how to use this module with scripts/functions.  Some example topics covered are add/remove keyCredentials (certificates), how to detect and respond to MS Graph throttling responses, and more.
 
 ## References
 
@@ -392,6 +393,7 @@ https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/wiki/Clie
 https://docs.microsoft.com/en-us/azure/architecture/multitenant-identity/client-assertion<br/>
 https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code<br/>
 https://docs.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-auth-code-flow#refresh-the-access-token<br/>
+https://docs.microsoft.com/en-us/exchange/client-developer/exchange-web-services/how-to-authenticate-an-ews-application-by-using-oauth<br/>
 
 **Application KeyCredential Management**
 
