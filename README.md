@@ -3,13 +3,13 @@ A collection of functions enabling easier consumption of Microsoft Graph using j
 
 [Available on PowerShell Gallery](https://www.powershellgallery.com/packages/MSGraphPSEssentials)
 
-This module provides some essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only (i.e. 100% unattended) fashion using certificate credentials, or in Delegated (i.e. interactive / partially unattended) fashion, using Device Code flow (and/or Refresh Tokens).  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD (and upload the initial certificate for App-Only scenarios).  Simply use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with `New-MSGraphRequest`.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
+This module provides some essential functions for working with Microsoft Graph using PowerShell 5.1 and newer, in App-Only (i.e. 100% unattended) fashion using certificate credentials, or in Delegated (i.e. interactive / partially unattended) fashion, using Device Code flow or Refresh Tokens.  Obtain access tokens, perform nearly any MS Graph request you can think of, and roll your own keys using the addKey and removeKey application resource type methods.  The only thing left to do manually is to setup an App Registration in Azure AD (configure API permissions and upload the initial certificate for App-Only scenarios).  Use the [MS Graph API (v1.0 / beta) reference material](https://docs.microsoft.com/en-us/graph/api/overview?view=graph-rest-1.0) to figure out your requests and query syntax, then start sending them with `New-MSGraphRequest`.  Options for handling paging are provided, allowing 'nextLink' responses to be handled however you prefer (automatic, inquire, warn, etc.).  Best of all - no DLL's; no big files at all.  In fact, only about 30-40KB.
 
 For Delegated scenarios, if you'd rather forego the hassles of creating an App Registration in Azure AD, feel free to use my MSGraphPSEssentials app from my Azure AD tenant.  It is setup as a multi-tenant app with support for organizational (i.e. Work/School) accounts and personal Microsoft accounts (MSA's) alike.  Just supply `-ApplicationId 0c26a905-7c94-4296-aeb4-b8925cb7e036` when using `New-MSGraphAccessToken`.
 
-📰**Newsflash! (2021-09-08)** [MSGraphPSEssentials 0.5.5](https://www.powershellgallery.com/packages/MSGraphPSEssentials/0.5.5) has been updated with a new parameter - `-ExoEwsAppOnlyScope` - which brings support for EWS app-only OAuth to this module.  Along with that comes the deprecation of the **EwsOAuthAppOnlyEssentials** module.
+📰**Newsflash! (2021-09-08)** [MSGraphPSEssentials 0.5.5](https://www.powershellgallery.com/packages/MSGraphPSEssentials/0.5.5) has been updated with a new parameter, `-ExoEwsAppOnlyScope`, which brings support for EWS app-only OAuth to this module.  Along with that comes the deprecation of the **EwsOAuthAppOnlyEssentials** module.
 
-💡 **In addition to to the documentation below, a growing list of samples can be found in the [wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki).**
+💡 **In addition to to the documentation below, a growing list of samples can be found in the [wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki).  A sample script has also be added (see /samples).**
 
 ---
 
@@ -24,7 +24,7 @@ This function is used to get an access token.  Access tokens last for 1 hour, so
 Parameters | Parameter Set | Description
 ---------: | :-----------: | :-----------
 ApplicationId | All parameter sets | The app's ApplicationId (a.k.a. ClientId)
-TenantId | All parameter sets | The directory/tenant ID (Guid)
+TenantId | All parameter sets | The directory/tenant ID (Guid or ***.onmicrosoft.com domain)
 Certificate<br />(Option 1) | ClientCredentials_Certificate | Use `$Certificate`, where `$Certificate = Get-ChildItem Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317`
 CertificateStorePath<br/>(Option 2) | ClientCredentials_CertificateStorePath | E.g. 'Cert:\LocalMachine\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
 **_(New in v0.5.5)_**<br />ExoEwsAppOnlyScope | ClientCredentials_* | Uses the Exchange Online scope (https://outlook.office365.com/.default), for use with EWS OAuth app-only authentication.
@@ -32,7 +32,7 @@ JWTExpMinutes | ClientCredentials_* | In case of a poorly-synced clock, use this
 Endpoint | DeviceCode_\*, RefreshToken_* | **Common**, Consumers, Organizations.  Common (default) should suffice for most scenarios.  Scopes will dictate when either of the other options must be used instead.
 Scopes | DeviceCode_\*, RefreshToken_* | One or more delegated permissions (e.g. Ews.AccessAsUser.All, mail.Send, offline_access).  Refer to MS Graph reference pages for required permissions.  Those permissions are exaclty what to specify here.
 RefreshToken | RefreshToken_* | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes ..., offline_access`.  The 'offline_access' scope is what tells Azure AD to also hand back a refresh token when issuing an access token.
-RefreshTokenCredential | RefreshTokenCredential_* | Supply a PSCredential object that was created by the new (in v0.2.0) function `New-RefreshTokenCredential`.  Refer to the example from `New-RefreshTokenCredential`'s section (further down in this readme) to see how to do this.
+RefreshTokenCredential | RefreshTokenCredential_* | Supply a PSCredential object that was created by the function `New-RefreshTokenCredential`.  Refer to the example from `New-RefreshTokenCredential`'s section (further down in this readme) to see how to do this.
 
 **Example 1**
 
@@ -63,7 +63,7 @@ $TokenObject = New-MSGraphAccessToken @TokenObjectParams
 
 **Example 3**
 
-(New) Get an access token using the Device Code flow:
+Get an access token using the Device Code flow:
 
 ```powershell
 $TokenObject = Get-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -Scopes mail.send, offline_access
@@ -76,7 +76,7 @@ To sign in, use a web browser to open the page https://microsoft.com/devicelogin
 
 **Example 4**
 
-(New) Refresh an access token (which was obtained using `New-MSGraphAccessToken` and including 'offline_access' in the `-Scopes` parameter):
+Refresh an access token (which was obtained using `New-MSGraphAccessToken` and including 'offline_access' in the `-Scopes` parameter):
 
 ```powershell
 # The original access token request needs to include the 'offline_access' scope to be given a refresh token along with the access token:
@@ -97,7 +97,7 @@ Method | **GET**, POST, PATCH, PUT, DELETE.  Follow the reference articles' inst
 AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`
 Request | Use the **HTTP request** shown in MS Graph reference articles.  Include the query parameters, E.g. ``"auditLogs/signIns?&`$filter=userId eq '86d691b0-8c2b-4adf-bdcd-d9f0ab7b6183' and status/errorCode eq 0"``.  The leading forward slash (e.g. "<b>/</b>users") can be include or omitted.
 Body<br/>(Optional) | Use the **request body** as shown in MS Graph reference articles, supplied as a hashtable (the function converts it to JSON automatically).
-nextLinkAction | Ignore, **Warn**, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
+nextLinkAction | **Warn**, Ignore, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
 
 **Example 1**
 
@@ -156,8 +156,8 @@ This function is simply a wrapper for New-SelfSignedCertificate with some base s
 
 Parameters | Description
 ---------: | :----------
-DnsName | Any FQDN of choice.  E.g. 20201116.jb365.ca
-FriendlyName | "jb365 automation 2020-11-16"
+Subject | String of choice, not tested thoroughly so don't get crazy with this.  E.g. 'jb365 MS Graph Automation'
+FriendlyName | Another string.  Will match Subject if nothing is supplied.
 CertStoreLocation | Maps directly to the same parameter of New-SelfSignedCertificate.  Default is 'cert:\CurrentUser\My'.  Any valid location where write access is available will work (e.g. 'cert:\LocalMachine\My', when scheduling tasks using local SYSTEM account).
 NotAfter | Default is 90 days.  Supply a [datetime] like this `(Get-Date).AddDays(7)`.  The shorter the better, because applications can add new certificates for themselves using the addKey method, so we can easily roll these often, programmatically.
 KeySpec | **Signature**, KeyExchange.  Recommendation: don't change this unless there is a reason.
@@ -165,7 +165,7 @@ KeySpec | **Signature**, KeyExchange.  Recommendation: don't change this unless 
 **Example 1**
 
 ```powershell
-New-SelfSignedMSGraphApplicationCertificate -DnsName "signInsMonitor.jb365.ca" -FriendlyName "jb365 signIns monitor ($($date))"
+New-SelfSignedMSGraphApplicationCertificate -Subject "jb365 MS Graph Automation" -NotAfter (Get-Date).AddDays(7)
 ```
 
 **Example 2**
@@ -173,8 +173,8 @@ New-SelfSignedMSGraphApplicationCertificate -DnsName "signInsMonitor.jb365.ca" -
 ```powershell
 $date = [datetime]::Now.ToString('yyyyMMdd')
 $newCertParams = @{
-    DnsName           = "$($date).jb365.ca"
-    FriendlyName      = "jb365 automation ($($date))"
+    Subject           = "jb365 MS Graph Automation"
+    FriendlyName      = "jb365 MS Graph Automation ($($date))"
     CertStoreLocation = 'Cert:\LocalMachine\My'
     NotAfter          = (Get-Date).AddDays(7)
 }
@@ -245,7 +245,7 @@ $popTKParams = @{
 $popTK = New-MSGraphPoPToken @popTKParams
 
 $dateString = [datetime]::Now.ToString('yyyyMMdd')
-$newCert = New-SelfSignedMSGraphApplicationCertificate -DnsName "$($dateString).jb365.ca" -FriendlyName "$($dateString).jb365.ca"
+$newCert = New-SelfSignedMSGraphApplicationCertificate -Subject "$($dateString).jb365.ca"
 
 $addKeyParams = @{
 
@@ -259,7 +259,7 @@ $addKeyResponse = Add-MSGraphApplicationKeyCredential @addKeyParams
 
 ### Remove-MSGraphApplicationKeyCredential
 
-This is the sixth and last function in the bunch to cover.  It is used to remove a keyCredential (i.e. certificate public key) from the Azure AD application.  The access token and PoP token should obtained/created using a different certificate than then one to be removed, otherwise MS Graph will hand back an error that doesn't make any sense, although it is doing so to protect the application from rendering itself unable to get authorization again.
+This function is used to remove a keyCredential (i.e. certificate public key) from the Azure AD application.  The access token and PoP token should obtained/created using a different certificate than then one to be removed, otherwise MS Graph will hand back an error that doesn't make any sense, although it is doing so to protect the application from rendering itself unable to get authorization again.
 
 Parameters | Description
 ---------: | :-----------
@@ -288,6 +288,7 @@ $popTKParams = @{
 $popTK = New-MSGraphPoPToken @popTKParams
 
 $removeKeyParams = @{
+
     AccessToken           = $TokenObject
     PoPToken              = $popTK
     ApplicationObjectId   = $popTKParams['ApplicationObjectId']
@@ -315,6 +316,7 @@ $popTKParams = @{
 $popTK = New-MSGraphPoPToken @popTKParams
 
 $removeKeyParams = @{
+
     AccessToken         = $TokenObject
     PoPToken            = $popTK
     ApplicationObjectId = $popTKParams['ApplicationObjectId']
@@ -327,7 +329,7 @@ Remove-MSGraphApplicationKeyCredential @removeKeyParams
 
 ### ConvertFrom-JWTAccessToken
 
-This utility function is not actually used by any other functions in this module.  It is simply included to give an easy way to inspect access tokens and see what headers and claims they contain.  Note that MSA (Microsoft Account) access tokens are different and won't work with this function.  Nor will refresh tokens.  Just access tokens from Azure AD for use with organizations.
+This utility function is included to give an easy way to inspect access tokens and see what headers and claims they contain.  Note that MSA (Microsoft Account) access tokens are different and won't work with this function.  Nor will refresh tokens.  Just access tokens from Azure AD for use with organizations.
 
 Parameters | Description
 ---------: | :-----------
@@ -350,11 +352,11 @@ ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token | Select-Object -Expan
 
 ### New-RefreshTokenCredential
 
-**_(New in v0.2.0)_** This function makes it easy to store a token object from `New-MSGraphAccessToken` (and ApplicationId Guid) as a PSCredential object which can be exported securely with Export-Clixml for easy reuse later on.  `New-MSGraphAccessToken` also has a new parameter in v0.2.0, `-RefreshTokenCredential`, which takes a PSCredential object that has been prepared by this function.
+This function makes it easy to store a token object from `New-MSGraphAccessToken` (and ApplicationId Guid) as a PSCredential object which can be exported securely with Export-Clixml for easy reuse later on.  `New-MSGraphAccessToken` also has a parameter - `-RefreshTokenCredential` - which takes a PSCredential object that has been prepared by this function.
 
 Parameters | Description
 ---------: | :-----------
-ApplicationId | The app's ApplicationId (a.k.a. ClientId)
+ApplicationId | The app's ApplicationId (a.k.a. ClientId)<br />*(This parameter will go away in a future version, as 'appid' is available from the Payload of the access_token itself, so no need to require it via a parameter.)*
 TokenObject | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -Scopes offline_access, ...` (must have the refresh_token (hence `-Scopes offline_access`)).
 
 **Example 1**
@@ -362,7 +364,7 @@ TokenObject | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken -S
 ```powershell
 $TokenObject = Get-MSGraphAccessToken -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -Scopes mail.send, offline_access
 
-$RTCredential = New-RefreshTokenCredential -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e03' -TokenObject $TokenObject
+$RTCredential = New-RefreshTokenCredential -ApplicationId '0c26a905-7c94-4296-aeb4-b8925cb7e036' -TokenObject $TokenObject
 $RTCredential | Export-Clixml .\RefreshToken.xml
 
 # ...then later on :
@@ -371,9 +373,39 @@ $RTCredential = Import-Clixml .\RefreshToken.xml
 $NewTokenObject = New-MSGraphAccessToken -RefreshTokenCredential $RTCredential
 ```
 
+### Get-AccessTokenExpiration
+
+This functions makes use of `ConvertFrom-JWTAccessToken` and pulls out some time-to-live information about your current access_token.
+
+Parameters | Description
+---------: | :-----------
+TokenObject | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`.
+
+**Example 1**
+
+```powershell
+$TokenObjectParams = @{
+
+    ApplicationId = '309f2789-a5ea-4b3a-92ea-687d54249613'
+    TenantId      = '1098c395-c09a-4c84-8e5e-2f454f318667'
+    Certificate   = Get-ChildItem -Path 'Cert:\CurrentUser\My\C3E7F30B9DD50B8B09B9B539BC41F8157642D317'
+}
+$TokenObject = New-MSGraphAccessToken @TokenObjectParams
+
+Get-AccessTokenExpiration -TokenObject $TokenObject
+
+# Output:
+
+IssuedAt_LocalTime       : 9/13/2021 8:02:26 PM
+NotBefore_LocalTime      : 9/13/2021 8:02:26 PM
+ExpirationTime_LocalTime : 9/13/2021 9:07:26 PM
+TimeUntilExpiration      : 00:59:50.9092678
+IsExpired                : False
+```
+
 ## Samples
 
-Check out the [sample script](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/tree/main/Samples) I added a few months back.  It demonstrates a few concepts for how to use this module with scripts/functions.  Some example topics covered are add/remove keyCredentials (certificates), how to detect and respond to MS Graph throttling responses, and more.
+Check out the [sample script](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/tree/main/Samples).  It demonstrates a few concepts for how to use this module with scripts/functions.  Some example topics covered are add/remove keyCredentials (certificates), how to detect and respond to MS Graph throttling responses, and more.
 
 ## References
 
