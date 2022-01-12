@@ -5,14 +5,23 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.5.5 (2021-09-08):
+<# Release Notes for v0.6.0 (2022-01-12):
 
-    - Added [-ExoEwsAppOnlyScope] switch parameter for New-MSGraphAccessToken's ClientCredentials parameter sets.
-        --  This will change the scope to https://outlook.office365.com/.default instead of the typical
-        https://graph.microsoft.com/.default, to enable OAuth app-only authentication with Exchange Online for EWS
-        applications.
-        -- Delegated permissions / user-present auth. flows for EWS are already covered in the DeviceCode and
-        RefreshToken parameter sets (i.e., supply -Scopes Ews.AccessUser.All).
+    -   Updated New-MSGraphRequest to no longer be a recursive function in order to gracefully avoid call depth
+        overflow, in the event that there are too many nextLink's (i.e., too may users to return in large orgs).  It is
+        still recommended to use the $top OData query option to set a larger page size to reduce the number of
+        nextLink's required to fetch all results.  This change just avoids any issues with call depth overflow,
+        regardless of proactive/strategic $top usage.
+
+    -   Updated New-MSGraphAccessToken so that it includes a new property in the output - 'issued_at'.  This new
+        property will be used by Get-AccessTokenExpiration.
+
+    -   Updated Get-AccessTokenExpiration so that it does its check using the 'issued_at' and 'expires_in' properties
+        from objects output by New-MSGraphAccessToken.  This is being done because during a Microsoft Identity Platform
+        webinar, I learned that Microsoft will soon begin encrypting all access tokens and that they should never be
+        looked at by programs, including to determine when they'll expire.  With the shimmmed-in 'issue_at' property,
+        combined with the already-included expires_in property that comes with the access_token, we can still
+        accomplish the same goal.
 #>
 
 function New-MSGraphAccessToken {
@@ -149,12 +158,12 @@ function New-MSGraphAccessToken {
             $EncodedHeader = [Convert]::ToBase64String(
                 [Text.Encoding]::UTF8.GetBytes(
                     (ConvertTo-Json -InputObject (
-                            @{
-                                alg = 'RS256'
-                                typ = 'JWT'
-                                x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Certificate.GetCertHash()))
-                            }
-                        )
+                        @{
+                            alg = 'RS256'
+                            typ = 'JWT'
+                            x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Certificate.GetCertHash()))
+                        }
+                    )
                     )
                 )
             )
@@ -162,15 +171,15 @@ function New-MSGraphAccessToken {
             $EncodedPayload = [Convert]::ToBase64String(
                 [Text.Encoding]::UTF8.GetBytes(
                     (ConvertTo-Json -InputObject (
-                            @{
-                                aud = "https://login.microsoftonline.com/$TenantId/oauth2/token"
-                                exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes) -UFormat '%s') -replace '\..*'
-                                iss = $ApplicationId.Guid
-                                jti = [Guid]::NewGuid()
-                                nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
-                                sub = $ApplicationId.Guid
-                            }
-                        )
+                        @{
+                            aud = "https://login.microsoftonline.com/$TenantId/oauth2/token"
+                            exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes) -UFormat '%s') -replace '\..*'
+                            iss = $ApplicationId.Guid
+                            jti = [Guid]::NewGuid()
+                            nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
+                            sub = $ApplicationId.Guid
+                        }
+                    )
                     )
                 )
             )
@@ -379,7 +388,8 @@ function New-MSGraphAccessToken {
 
     #region Main
     try {
-        switch -Wildcard ($PSCmdlet.ParameterSetName) {
+        $TokenIssuedAt = [datetime]::Now
+        $TokenObject = switch -Wildcard ($PSCmdlet.ParameterSetName) {
 
             'ClientCredentials_*' {
 
@@ -396,6 +406,7 @@ function New-MSGraphAccessToken {
                 Get-RefreshedAcessToken $Script:Endpoint $Script:ApplicationId $Script:RefreshToken $Scopes
             }
         }
+        $TokenObject | Add-Member -NotePropertyName issued_at -NotePropertyValue $TokenIssuedAt -PassThru
     }
     catch {
         if ($_.errorDetails.message -match '(AADSTS50194)') {
@@ -441,7 +452,9 @@ function New-MSGraphRequest {
     )
 
     try {
-        $RequestParams = @{
+        function _sendRequest ([hashtable]$requestParams) { Invoke-RestMethod @requestParams }
+
+        $_initialRequestParams = @{
 
             Headers     = @{ Authorization = "Bearer $($AccessToken.access_token)" }
             Uri         = "https://graph.microsoft.com/$($ApiVersion)/$($Request)"
@@ -457,25 +470,25 @@ function New-MSGraphRequest {
 
                 throw "Body is not allowed when the method is $($Method), only POST or PATCH."
             }
-            else { $RequestParams['Body'] = $Body }
+            else { $_initialRequestParams['Body'] = $Body }
         }
 
-        Invoke-RestMethod @RequestParams -OutVariable requestResponse
+        $_initialResponse = _sendRequest -requestParams $_initialRequestParams
+        $_initialResponse
 
-        if ($requestResponse.'@odata.nextLink') {
+        if ($_initialResponse.'@odata.nextLink') {
 
             $Script:Continue = $true
 
             switch ($nextLinkAction) {
 
                 Ignore { $Script:Continue = $false }
-
                 Warn {
-                    Write-Warning -Message "There are more results available. Next page: $($requestResponse.'@odata.nextLink')"
+                    Write-Warning -Message "There are more results available. Next page: $($_initialResponse.'@odata.nextLink')"
                     $Script:Continue = $false
                 }
                 'Continue' {
-                    Write-Information -MessageData 'There are more results available.  Getting the next page...' -InformationAction Continue
+                    Write-Information -MessageData 'There are more results available.  Getting the next page(s)...'
 
                 }
                 Inquire {
@@ -484,29 +497,28 @@ function New-MSGraphRequest {
 
                             'There are more results available (i.e. response included @odata.nextLink).',
                             'Get more results?',
-                            [ChoiceDescription[]]@('&Yes', 'Yes to &All', '&No'),
-                            2
+                            [ChoiceDescription[]]@('&Yes', '&No'),
+                            1
                         )
                     ) {
                         0 { <# Will prompt for choice again if the next response includes another @odata.nextLink.#> }
-                        1 { $nextLinkAction = 'SilentlyContinue' }
-                        2 { $Script:Continue = $false }
+                        1 { $Script:Continue = $false }
                     }
                 }
+                default { <# SilentlyContinue (legacySupport) #> }
             }
 
             if ($Script:Continue) {
 
-                $nextLinkRequestParams = @{
-
-                    AccessToken    = $AccessToken
-                    ApiVersion     = $ApiVersion
-                    Request        = "$($requestResponse.'@odata.nextLink' -replace 'https://graph.microsoft.com/(v1\.0|beta)/')"
-                    nextLinkAction = $nextLinkAction
-                    ErrorAction    = 'Stop'
+                $_lastResponse = $null
+                do {
+                    $_nextLinkRequestParams = $_initialRequestParams.Clone()
+                    $_nextLinkRequestParams.Uri = if ($null -ne $_lastResponse) { $_lastResponse.'@odata.nextLink' } else { $_initialResponse.'@odata.nextLink' }
+                    $_thisResponse = _sendRequest -requestParams $_nextLinkRequestParams
+                    $_thisResponse
+                    $_lastResponse = $_thisResponse
                 }
-
-                New-MSGraphRequest @nextLinkRequestParams
+                while ($null -ne $_lastResponse.'@odata.nextLink')
             }
         }
     }
@@ -633,12 +645,12 @@ function New-MSGraphPoPToken {
         $EncodedHeader = [Convert]::ToBase64String(
             [Text.Encoding]::UTF8.GetBytes(
                 (ConvertTo-Json -InputObject (
-                        @{
-                            alg = 'RS256'
-                            typ = 'JWT'
-                            x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
-                        }
-                    )
+                    @{
+                        alg = 'RS256'
+                        typ = 'JWT'
+                        x5t = ConvertTo-Base64Url -String ([Convert]::ToBase64String($Script:Certificate.GetCertHash()))
+                    }
+                )
                 )
             )
         )
@@ -646,13 +658,13 @@ function New-MSGraphPoPToken {
         $EncodedPayload = [Convert]::ToBase64String(
             [Text.Encoding]::UTF8.GetBytes(
                 (ConvertTo-Json -InputObject (
-                        @{
-                            aud = '00000002-0000-0000-c000-000000000000'
-                            iss = $ApplicationObjectId.Guid
-                            exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes)-UFormat '%s') -replace '\..*'
-                            nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
-                        }
-                    )
+                    @{
+                        aud = '00000002-0000-0000-c000-000000000000'
+                        iss = $ApplicationObjectId.Guid
+                        exp = (Get-Date $NowUTC.AddMinutes($JWTExpMinutes)-UFormat '%s') -replace '\..*'
+                        nbf = (Get-Date $NowUTC -UFormat '%s') -replace '\..*'
+                    }
+                )
                 )
             )
         )
@@ -950,7 +962,10 @@ function Get-AccessTokenExpiration {
         [Parameter(Mandatory)]
         [ValidateScript(
             {
-                if ($_.token_type -eq 'Bearer' -and $_.access_token) { $true } else {
+                if (($_.token_type -eq 'Bearer') -and
+                    ($_.access_token) -and
+                    ($_.expires_in -is [int]) -and
+                    ($_.issued_at -is [datetime])) { $true } else {
 
                     throw 'Invalid token object.  Supply $TokenObject where: $TokenObject = New-MSGraphAccessToken...'
                 }
@@ -958,18 +973,17 @@ function Get-AccessTokenExpiration {
         )]
         [Object]$TokenObject
     )
+    try {
+        $Now = [datetime]::Now
+        $Expires = $TokenObject.issued_at.AddSeconds($TokenObject.expires_in)
 
-    $JWT = ConvertFrom-JWTAccessToken -JWT $TokenObject.access_token
-    $Epoch = [datetime]"1970-01-01"
-    $Now = [datetime]::Now
-    $exp = $Epoch.AddSeconds($JWT.Payload.exp).ToLocalTime()
+        [PSCustomObject]@{
 
-    [PSCustomObject]@{
-
-        IssuedAt_LocalTime       = $Epoch.AddSeconds($JWT.Payload.iat).ToLocalTime()
-        NotBefore_LocalTime      = $Epoch.AddSeconds($JWT.Payload.nbf).ToLocalTime()
-        ExpirationTime_LocalTime = $exp
-        TimeUntilExpiration      = $exp - $Now
-        IsExpired                = $Now -gt $exp
+            IssuedAt_LocalTime       = $TokenObject.issued_at
+            ExpirationTime_LocalTime = $Expires
+            TimeUntilExpiration      = $Expires - $Now
+            IsExpired                = $Now -gt $Expires
+        }
     }
+    catch { throw }
 }
