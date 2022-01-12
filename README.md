@@ -7,7 +7,7 @@ This module provides some essential functions for working with Microsoft Graph u
 
 For Delegated scenarios, if you'd rather forego the hassles of creating an App Registration in Azure AD, feel free to use my MSGraphPSEssentials app from my Azure AD tenant.  It is setup as a multi-tenant app with support for organizational (i.e. Work/School) accounts and personal Microsoft accounts (MSA's) alike.  Just supply `-ApplicationId 0c26a905-7c94-4296-aeb4-b8925cb7e036` when using `New-MSGraphAccessToken`.
 
-📰**Newsflash! (2021-09-08)** [MSGraphPSEssentials 0.5.5](https://www.powershellgallery.com/packages/MSGraphPSEssentials/0.5.5) has been updated with a new parameter, `-ExoEwsAppOnlyScope`, which brings support for EWS app-only OAuth to this module.  Along with that comes the deprecation of the **EwsOAuthAppOnlyEssentials** module.
+📰**FYI (as of v0.5.5)** `New-MSGraphAccessToken` has been updated with a new parameter, `-ExoEwsAppOnlyScope`, which brings support for EWS app-only OAuth to this module.  Along with that came the deprecation of the **EwsOAuthAppOnlyEssentials** module.
 
 💡 **In addition to to the documentation below, a growing list of samples can be found in the [wiki](https://github.com/JeremyTBradshaw/MSGraphPSEssentials/wiki).  A sample script has also be added (see /samples).**
 
@@ -17,7 +17,7 @@ For Delegated scenarios, if you'd rather forego the hassles of creating an App R
 
 ### New-MSGraphAccessToken
 
-This function is used to get an access token.  Access tokens last for 1 hour, so keep this in mind in long-running scripts.
+This function is used to get an access token.  Access tokens generally last for 1 hour, so keep this in mind in long-running scripts, and also make use of `Get-AccessTokenExpiration` (see notes farther down the page below) to remove any guesswork.
 
 ℹ **Note:** For a less-powerful (security-wise) alternative to app-only access tokens, you may find that you can accomplish enough unattended'ness by interactively requesting the initial access token using Device Code flow, and then programmatically refreshing the access token before the refresh token expires.  As long as the refresh token is never revoked, this could go on forever, unattended.
 
@@ -97,7 +97,7 @@ Method | **GET**, POST, PATCH, PUT, DELETE.  Follow the reference articles' inst
 AccessToken | Use `$TokenObject` where `$TokenObject = New-MSGraphAccessToken ...`
 Request | Use the **HTTP request** shown in MS Graph reference articles.  Include the query parameters, E.g. ``"auditLogs/signIns?&`$filter=userId eq '86d691b0-8c2b-4adf-bdcd-d9f0ab7b6183' and status/errorCode eq 0"``.  The leading forward slash (e.g. "<b>/</b>users") can be include or omitted.
 Body<br/>(Optional) | Use the **request body** as shown in MS Graph reference articles, supplied as a hashtable (the function converts it to JSON automatically).
-nextLinkAction | **Warn**, Ignore, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.
+nextLinkAction | **Warn**, Ignore, Inquire, Continue, SilentlyContinue.  When multiple pages of results are available (i.e. more than 100 users), use this to decide how and whether to keep getting the next page of results.  When possible, it is best to use the $top OData query option to set a larger page size to avoid an unnecessary abundance of nextLink requests.
 
 **Example 1**
 
@@ -329,6 +329,8 @@ Remove-MSGraphApplicationKeyCredential @removeKeyParams
 
 ### ConvertFrom-JWTAccessToken
 
+⚠ **Warning:** Microsoft officially recommends that we NEVER look inside the access_token, and claims they will eventually encrypt all issued access tokens.  When that happens, this function will be obsolete.  And until then, it's still a sort of 'faux pas'.
+
 This utility function is included to give an easy way to inspect access tokens and see what headers and claims they contain.  Note that MSA (Microsoft Account) access tokens are different and won't work with this function.  Nor will refresh tokens.  Just access tokens from Azure AD for use with organizations.
 
 Parameters | Description
@@ -375,7 +377,7 @@ $NewTokenObject = New-MSGraphAccessToken -RefreshTokenCredential $RTCredential
 
 ### Get-AccessTokenExpiration
 
-This functions makes use of `ConvertFrom-JWTAccessToken` and pulls out some time-to-live information about your current access_token.
+This functions makes use of `New-MSGraphAccessToken`'s shimmed-in `issued_at` property to determine when your access_token is due to expire.
 
 Parameters | Description
 ---------: | :-----------
@@ -397,7 +399,6 @@ Get-AccessTokenExpiration -TokenObject $TokenObject
 # Output:
 
 IssuedAt_LocalTime       : 9/13/2021 8:02:26 PM
-NotBefore_LocalTime      : 9/13/2021 8:02:26 PM
 ExpirationTime_LocalTime : 9/13/2021 9:07:26 PM
 TimeUntilExpiration      : 00:59:50.9092678
 IsExpired                : False
