@@ -1,3 +1,14 @@
+# ⚠ End-of-Life Notice (2022-04-20)
+
+FYI, at this point in time, Microsoft have delivered a proper set of PowerShell modules for interacting with Microsoft Graph.  Thanks to that, I will not be working on MSGraphPSEssentials any longer, unless some valid reason to comes up.  I suggest moving over to the official modules considering the fact they are backed and supported by Microsoft.  Where they fall short in my opinion is that you need to learn the ins and outs of both MS Graph and their new modules, each having their own entirely different set of syntaxes.  So twice the learning time required to take part, whereas with MSGraphPSEssentials, you only need to learn the MS Graph reference material and plug your requests into the New-MSGraphRequest function.  Oh well, it is still slicker, more official, and supported, so it makes sense to go with that.
+
+If you tried and/or enjoyed MSGraphPSEssentials, thank you very much, it was a fun side project for me.  I won't be de-listing MSGraphPSEssentials from Powershell Gallery for now, and will also leave this repo here too.  It still works just like always so definitely feel free to keep using it (or clone it and take it further as you see fit).
+
+* [Microsoft Graph PowerShell overview](https://docs.microsoft.com/en-us/powershell/microsoftgraph/overview?view=graph-powershell-1.0)
+* [Install the Microsoft Graph PowerShell SDK](https://docs.microsoft.com/en-us/powershell/microsoftgraph/installation?view=graph-powershell-1.0)
+
+---
+
 # MSGraphPSEssentials
 A collection of functions enabling easier consumption of Microsoft Graph using just PowerShell (Desktop/Core).
 
