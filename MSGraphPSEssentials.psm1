@@ -5,23 +5,9 @@ using namespace System.Runtime.InteropServices
 using namespace System.Security.Cryptography
 using namespace System.Security.Cryptography.X509Certificates
 
-<# Release Notes for v0.6.0 (2022-01-12):
+<# Release Notes for v0.6.1 (2022-06-03 (not-yet-published)):
 
-    -   Updated New-MSGraphRequest to no longer be a recursive function in order to gracefully avoid call depth
-        overflow, in the event that there are too many nextLink's (i.e., too may users to return in large orgs).  It is
-        still recommended to use the $top OData query option to set a larger page size to reduce the number of
-        nextLink's required to fetch all results.  This change just avoids any issues with call depth overflow,
-        regardless of proactive/strategic $top usage.
-
-    -   Updated New-MSGraphAccessToken so that it includes a new property in the output - 'issued_at'.  This new
-        property will be used by Get-AccessTokenExpiration.
-
-    -   Updated Get-AccessTokenExpiration so that it does its check using the 'issued_at' and 'expires_in' properties
-        from objects output by New-MSGraphAccessToken.  This is being done because during a Microsoft Identity Platform
-        webinar, I learned that Microsoft will soon begin encrypting all access tokens and that they should never be
-        looked at by programs, including to determine when they'll expire.  With the shimmmed-in 'issue_at' property,
-        combined with the already-included expires_in property that comes with the access_token, we can still
-        accomplish the same goal.
+    -   [New-MSGraphRequest] Added a 200 millisecond sleep for each nextLink request, to avoid throttling proactively.
 #>
 
 function New-MSGraphAccessToken {
@@ -512,6 +498,7 @@ function New-MSGraphRequest {
 
                 $_lastResponse = $null
                 do {
+                    Start-Sleep -Milliseconds 200 #<--: avoiding throttling.
                     $_nextLinkRequestParams = $_initialRequestParams.Clone()
                     $_nextLinkRequestParams.Uri = if ($null -ne $_lastResponse) { $_lastResponse.'@odata.nextLink' } else { $_initialResponse.'@odata.nextLink' }
                     $_thisResponse = _sendRequest -requestParams $_nextLinkRequestParams
