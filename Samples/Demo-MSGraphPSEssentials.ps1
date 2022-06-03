@@ -108,7 +108,7 @@
     considered complete.
 #>
 #Requires -Version 5.1
-#Requires -Modules @{ModuleName = 'MSGraphPSEssentials'; Guid = '7394f3f8-a172-4e18-8e40-e41295131e0b'; RequiredVersion = '0.4.1'}
+#Requires -Modules @{ModuleName = 'MSGraphPSEssentials'; Guid = '7394f3f8-a172-4e18-8e40-e41295131e0b'; RequiredVersion = '0.6.0'}
 using namespace System.Management.Automation
 
 [CmdletBinding(
@@ -187,13 +187,7 @@ function writeLog {
 }
 
 function newMGAccessToken {
-    param(
-        [guid]$ApplicationId = $Script:msGraphParams.tokenParams['ApplicationId'],
-        [guid]$TenantId = $Script:msGraphParams.tokenParams['TenantId'],
-        [string]$CertificateStorePath = $Script:msGraphParams.tokenParams['CertificateStorePath']
-    )
-
-    try { $Script:mgAccessToken = New-MSGraphAccessToken @PSBoundParameters -ErrorAction Stop }
+    try { $Script:mgAccessToken = New-MSGraphAccessToken @Script:mgTokenParams -ErrorAction Stop }
     catch { throw }
 }
 
@@ -277,7 +271,7 @@ function newMGRequest {
             writeLog @writeLogParams -PassThru |
             Write-Warning
             Start-Sleep -Seconds ([math]::Max(10, [int]$_.Exception.Response.Headers['Retry-After']))
-            newMGRequest @reqParams -ErrorAction Stop
+            newMGRequest @reqParams
         }
         else {
             # Reset throttled counter and bailout:
