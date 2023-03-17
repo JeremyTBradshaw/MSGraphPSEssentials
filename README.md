@@ -1,15 +1,6 @@
-# ⚠ End-of-Life Notice (2022-04-20)
+# ⚠ End-of-Life Notice (2022-04-20, 2023-03-17)
 
-> ## ℹ (temporary extension)
-> There have been some minor issues discovered with several of the official MS Graph PowerShell SDK modules.  These include:
->  - Throttling is handled automatically, but only with 3 (hardcoded) retries.  We lose access to the Retry-After header, so we can't do much to band-aid this ourselves.
->  - Some SPO list item cmdlets have case-sensitivity issues preventing us from adding/updating list items.
->  - These examples jumped out at me right away (didn't have to go looking for problems).
-> 
-> Considering this, I'll likely keep working on this module from time to time to address my own needs while we wait for the official modules to tighten up.
-
-
-FYI, at this point in time, Microsoft have delivered a proper set of PowerShell modules for interacting with Microsoft Graph.  Thanks to that, I will not be working on MSGraphPSEssentials any longer, unless some valid reason to comes up.  I suggest moving over to the official modules considering the fact they are backed and supported by Microsoft.  Where they fall short in my opinion is that you need to learn the ins and outs of both MS Graph and their new modules, each having their own entirely different set of syntaxes.  So twice the learning time required to take part, whereas with MSGraphPSEssentials, you only need to learn the MS Graph reference material and plug your requests into the New-MSGraphRequest function.  Oh well, it is still slicker, more official, and supported, so it makes sense to go with that.
+FYI, at this point in time, Microsoft have delivered a proper set of PowerShell modules for interacting with Microsoft Graph.  Thanks to that, I will not be working on MSGraphPSEssentials any longer, unless some valid reason to comes up.  I suggest moving over to the official modules considering the fact they are backed and supported by Microsoft.  Where they fall short in my opinion is that you need to learn the ins and outs of both MS Graph and their new modules, each having their own entirely different set of syntaxes.  So twice the learning time required to take part, whereas with MSGraphPSEssentials, you only need to learn the MS Graph reference material and plug your requests into the New-MSGraphRequest function.  At the same time, the [Invoke-MgGraphRequest](https://learn.microsoft.com/en-us/powershell/microsoftgraph/authentication-commands?view=graph-powershell-1.0#using-invoke-mggraphrequest) function that comes with the official module is essentially a like-for-like replacement of MSGraphPSEssentials' New-MSGraphRequest, and then some.  So this module is officially obsoleted by Microsoft's official offering..
 
 If you tried and/or enjoyed MSGraphPSEssentials, thank you very much, it was a fun side project for me.  I won't be de-listing MSGraphPSEssentials from Powershell Gallery for now, and will also leave this repo here too.  It still works just like always so definitely feel free to keep using it (or clone it and take it further as you see fit).
 
